@@ -11,25 +11,32 @@ use tmelcrypt::{Ed25519SK, HashVal};
 
 #[derive(StructOpt, Clone, Debug)]
 enum Args {
+    /// Create a wallet
     CreateWallet {
         #[structopt(flatten)]
         wargs: WalletArgs,
         #[structopt(long)]
         testnet: bool,
     },
+    /// List all available wallets
     ListWallets(CommonArgs),
+    /// Send a 1000 MEL faucet transaction for a testnet wallet
     SendFaucet(WalletArgs),
+    /// Wait for a particular transaction to confirm
     WaitConfirmation {
         #[structopt(flatten)]
         wargs: WalletArgs,
         txhash: HashVal,
     },
+    /// Send a transaction to the network
     SendTx {
         #[structopt(flatten)]
         wargs: WalletArgs,
         #[structopt(long)]
+        /// A string specifying who to send money to, in the format "dest,amount[,denom[,additional_data]]". For example, --to $ADDRESS,1 sends 1 µMEL to $ADDRESS. Can be specified multiple times to send money to multiple addresses.
         to: Vec<CoinDataWrapper>,
         #[structopt(long)]
+        /// Hexadecimal secret key
         secret: String,
     },
 }
@@ -85,6 +92,7 @@ impl FromStr for CoinDataWrapper {
 #[derive(StructOpt, Clone, Debug)]
 struct WalletArgs {
     #[structopt(short)]
+    /// Name of the wallet to create or use
     wallet: String,
 
     #[structopt(flatten)]
@@ -105,6 +113,7 @@ impl WalletArgs {
 #[derive(StructOpt, Clone, Debug)]
 struct CommonArgs {
     #[structopt(long, default_value = "127.0.0.1:11773")]
+    /// HTTP endpoint of a running melwalletd instance
     endpoint: SocketAddr,
 }
 
