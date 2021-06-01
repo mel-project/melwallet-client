@@ -202,9 +202,25 @@ fn main() -> http_types::Result<()> {
             }
             Args::WaitConfirmation { wargs, txhash } => loop {
                 let wallet = wargs.wallet().await?;
+                let wallet_dump = wargs
+                    .common
+                    .dclient()
+                    .dump_wallet(&wargs.wallet)
+                    .await?
+                    .unwrap();
                 let status = wallet.get_transaction_status(TxHash(txhash)).await?;
                 if let Some(height) = status.confirmed_height {
                     eprintln!("Confirmed at height {}", height);
+                    eprintln!(
+                        "(in block explorer: https://{}/blocks/{}/{})",
+                        if wallet_dump.summary.network == NetID::Testnet {
+                            "scan-testnet.themelio.org"
+                        } else {
+                            "scan.themelio.org"
+                        },
+                        height,
+                        txhash
+                    );
                     break;
                 } else {
                     eprint!("{}", ".".yellow());
