@@ -245,7 +245,11 @@ fn write_txhash(out: &mut impl Write, wallet_name: &str, txhash: TxHash) -> anyh
     writeln!(
         out,
         "(wait for confirmation with {})",
-        format!("melwalletd wait-confirmation -w {} {}", wallet_name, txhash).bright_blue(),
+        format!(
+            "melwallet-cli wait-confirmation -w {} {}",
+            wallet_name, txhash
+        )
+        .bright_blue(),
     )?;
     Ok(())
 }
