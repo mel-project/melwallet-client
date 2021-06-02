@@ -19,9 +19,11 @@ enum Args {
         testnet: bool,
     },
     /// List all available wallets
-    ListWallets(CommonArgs),
+    List(CommonArgs),
     /// Send a 1000 MEL faucet transaction for a testnet wallet
     SendFaucet(WalletArgs),
+    /// Details of a wallet
+    Summary(WalletArgs),
     /// Wait for a particular transaction to confirm
     WaitConfirmation {
         #[structopt(flatten)]
@@ -148,13 +150,17 @@ fn main() -> http_types::Result<()> {
                     hex::encode(new_secret.0).bright_red()
                 )?;
             }
-            Args::ListWallets(common) => {
+            Args::List(common) => {
                 let dclient = common.dclient();
                 let wallets = dclient.list_wallets().await?;
                 for (name, summary) in wallets {
                     write_wallet_summary(&mut twriter, &name, &summary)?;
                     writeln!(twriter)?;
                 }
+            }
+            Args::Summary(wallet) => {
+                let summary = wallet.wallet().await?.summary().await?;
+                write_wallet_summary(&mut twriter, &wallet.wallet, &summary)?;
             }
             Args::SendFaucet(wallet) => {
                 let txhash = wallet.wallet().await?.send_faucet().await?;
@@ -247,12 +253,25 @@ fn write_wallet_summary(
             NetID::Testnet => "testnet".yellow().bold(),
         }
     )?;
-    writeln!(out, "Address:\t{}", summary.address.bright_blue())?;
+    writeln!(
+        out,
+        "Address:\t{}",
+        summary.address.to_string().bright_blue()
+    )?;
     writeln!(
         out,
         "Balance:\t{}",
-        format!("{} µMEL", summary.total_micromel)
+        format!("{}\tµMEL", summary.total_micromel)
     )?;
+    for (k, v) in summary.detailed_balance.iter() {
+        let denom = match k.as_str() {
+            "6d" => continue,
+            "73" => "µSYM",
+            "64" => "µnomDOSC",
+            v => v,
+        };
+        writeln!(out, "\t{}\t{}", v, denom)?;
+    }
     Ok(())
 }
 

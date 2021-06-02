@@ -1293,6 +1293,7 @@ dependencies = [
  "smol",
  "smol-timeout",
  "smolscale",
+ "stdcode",
  "structopt",
  "tabwriter",
  "themelio-stf",

@@ -2,14 +2,19 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use themelio_stf::{melvm::Covenant, CoinData, CoinDataHeight, CoinID, NetID, Transaction};
+use themelio_stf::{
+    melvm::{CovHash, Covenant},
+    CoinData, CoinDataHeight, CoinID, NetID, Transaction,
+};
 use tmelcrypt::HashVal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletSummary {
     pub total_micromel: u128,
+    pub detailed_balance: BTreeMap<String, u128>,
     pub network: NetID,
-    pub address: String,
+    #[serde(with = "stdcode::asstr")]
+    pub address: CovHash,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

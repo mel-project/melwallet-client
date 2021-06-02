@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, convert::TryInto, net::SocketAddr};
 
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
-use themelio_stf::{CoinData, Transaction, TxHash};
+use themelio_stf::{CoinData, CoinID, Transaction, TxHash};
 use tmelcrypt::Ed25519SK;
 
 use crate::{structs::WalletSummary, TransactionStatus, WalletDump};
@@ -133,6 +133,29 @@ impl WalletClient {
         Ok(http_get(
             self.endpoint,
             &format!("wallets/{}/transactions/{}", self.wallet_name, txhash),
+        )
+        .await?
+        .body_json()
+        .await?)
+    }
+
+    /// Adds a coin
+    pub async fn add_coin(&self, coin_id: CoinID) -> http_types::Result<()> {
+        http_with_body(
+            self.endpoint,
+            &format!("wallets/{}/coins/{}", &self.wallet_name, coin_id),
+            Method::Put,
+            vec![],
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Obtains the current wallet summary.
+    pub async fn summary(&self) -> http_types::Result<WalletSummary> {
+        Ok(http_get(
+            self.endpoint,
+            &format!("wallets/{}?summary=1", self.wallet_name),
         )
         .await?
         .body_json()
