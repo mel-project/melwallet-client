@@ -1,7 +1,7 @@
 use anyhow::Context;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
-use smol::prelude::*;
+use smol::{prelude::*, process::Child};
 use std::{convert::TryInto, io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
@@ -117,11 +117,40 @@ struct CommonArgs {
     #[structopt(long, default_value = "127.0.0.1:11773")]
     /// HTTP endpoint of a running melwalletd instance
     endpoint: SocketAddr,
+
+    /// Automatically start the wallet daemon. This will always create wallets in $HOME/.auto-melwallet
+    #[structopt(short, long)]
+    autostart: bool,
 }
 
 impl CommonArgs {
     fn dclient(&self) -> DaemonClient {
         DaemonClient::new(self.endpoint)
+    }
+
+    async fn start_daemon(&self) -> anyhow::Result<KillOnDrop> {
+        if self.autostart {
+            let mut home_dir = dirs::home_dir().context("cannot obtain home directory")?;
+            home_dir.push(".auto-melwallet");
+            let child = smol::process::Command::new("melwalletd")
+                .arg("--wallet-dir")
+                .arg(&home_dir.as_os_str())
+                .spawn()?;
+            smol::Timer::after(Duration::from_millis(100)).await;
+            Ok(KillOnDrop(Some(child)))
+        } else {
+            Ok(KillOnDrop(None))
+        }
+    }
+}
+
+struct KillOnDrop(Option<Child>);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        if let Some(mut child) = self.0.take() {
+            let _ = child.kill();
+        }
     }
 }
 
@@ -132,6 +161,7 @@ fn main() -> http_types::Result<()> {
         let args = Args::from_args();
         match args {
             Args::CreateWallet { wargs, testnet } => {
+                let _daemon = wargs.common.start_daemon().await?;
                 let dclient = wargs.common.dclient();
                 let new_secret = dclient.create_wallet(&wargs.wallet, testnet).await?;
                 let summary = dclient
@@ -151,6 +181,7 @@ fn main() -> http_types::Result<()> {
                 )?;
             }
             Args::List(common) => {
+                let _daemon = common.start_daemon().await?;
                 let dclient = common.dclient();
                 let wallets = dclient.list_wallets().await?;
                 for (name, summary) in wallets {
@@ -159,14 +190,17 @@ fn main() -> http_types::Result<()> {
                 }
             }
             Args::Summary(wallet) => {
+                let _daemon = wallet.common.start_daemon().await?;
                 let summary = wallet.wallet().await?.summary().await?;
                 write_wallet_summary(&mut twriter, &wallet.wallet, &summary)?;
             }
             Args::SendFaucet(wallet) => {
+                let _daemon = wallet.common.start_daemon().await?;
                 let txhash = wallet.wallet().await?.send_faucet().await?;
                 write_txhash(&mut twriter, &wallet.wallet, txhash)?;
             }
             Args::SendTx { wargs, to, secret } => {
+                let _daemon = wargs.common.start_daemon().await?;
                 let wallet = wargs.wallet().await?;
                 let secret = Ed25519SK(hex::decode(&secret)?.try_into().unwrap());
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
@@ -207,6 +241,7 @@ fn main() -> http_types::Result<()> {
                 }
             }
             Args::WaitConfirmation { wargs, txhash } => loop {
+                let _daemon = wargs.common.start_daemon().await?;
                 let wallet = wargs.wallet().await?;
                 let wallet_dump = wargs
                     .common
