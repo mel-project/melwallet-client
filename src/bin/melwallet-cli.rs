@@ -2,7 +2,7 @@ use anyhow::Context;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 use smol::{prelude::*, process::Child};
-use std::{convert::TryInto, io::Write, time::Duration};
+use std::{convert::TryInto, io::Write, process::Stdio, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
 use tabwriter::TabWriter;
@@ -135,6 +135,9 @@ impl CommonArgs {
             let child = smol::process::Command::new("melwalletd")
                 .arg("--wallet-dir")
                 .arg(&home_dir.as_os_str())
+                .stderr(Stdio::null())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
                 .spawn()?;
             smol::Timer::after(Duration::from_millis(100)).await;
             Ok(KillOnDrop(Some(child)))
