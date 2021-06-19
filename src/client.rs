@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, convert::TryInto, net::SocketAddr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    convert::TryInto,
+    net::SocketAddr,
+};
 
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
@@ -70,14 +74,47 @@ pub struct WalletClient {
     wallet_name: String,
 }
 
+async fn successful(mut resp: Response) -> http_types::Result<Response> {
+    if resp.status() == StatusCode::Ok {
+        Ok(resp)
+    } else {
+        return Err(anyhow::anyhow!(
+            "non-200 response: ({}) {}",
+            resp.status(),
+            resp.body_string().await?
+        )
+        .into());
+    }
+}
+
 impl WalletClient {
+    /// Unlock a wallet
+    pub async fn unlock(&self, password: Option<String>) -> http_types::Result<()> {
+        let mut val = HashMap::new();
+        val.insert("pwd", password);
+        successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/unlock", self.wallet_name),
+                Method::Post,
+                serde_json::to_vec(&val)?,
+            )
+            .await?,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Send a 1000 MEL faucet transaction
     pub async fn send_faucet(&self) -> http_types::Result<TxHash> {
-        let hash_string: String = http_with_body(
-            self.endpoint,
-            &format!("wallets/{}/send-faucet", self.wallet_name),
-            Method::Post,
-            vec![],
+        let hash_string: String = successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/send-faucet", self.wallet_name),
+                Method::Post,
+                vec![],
+            )
+            .await?,
         )
         .await?
         .body_json()
@@ -87,11 +124,14 @@ impl WalletClient {
 
     /// Send a transaction
     pub async fn send_tx(&self, tx: Transaction) -> http_types::Result<TxHash> {
-        let hash_string: String = http_with_body(
-            self.endpoint,
-            &format!("wallets/{}/send-tx", self.wallet_name),
-            Method::Post,
-            serde_json::to_value(tx)?,
+        let hash_string: String = successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/send-tx", self.wallet_name),
+                Method::Post,
+                serde_json::to_value(tx)?,
+            )
+            .await?,
         )
         .await?
         .body_json()
@@ -103,22 +143,27 @@ impl WalletClient {
     pub async fn prepare_transaction(
         &self,
         desired_outputs: Vec<CoinData>,
-        secret: Ed25519SK,
+        secret: Option<Ed25519SK>,
     ) -> http_types::Result<Transaction> {
         let mut adhoc = BTreeMap::new();
         adhoc.insert(
             "outputs".to_string(),
             serde_json::to_value(&desired_outputs)?,
         );
-        adhoc.insert(
-            "signing_key".to_string(),
-            serde_json::to_value(hex::encode(&secret.0))?,
-        );
-        http_with_body(
-            self.endpoint,
-            &format!("wallets/{}/prepare-tx", self.wallet_name),
-            Method::Post,
-            serde_json::to_vec(&adhoc)?,
+        if let Some(secret) = secret {
+            adhoc.insert(
+                "signing_key".to_string(),
+                serde_json::to_value(hex::encode(&secret.0))?,
+            );
+        }
+        successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/prepare-tx", self.wallet_name),
+                Method::Post,
+                serde_json::to_vec(&adhoc)?,
+            )
+            .await?,
         )
         .await?
         .body_json()
@@ -130,9 +175,12 @@ impl WalletClient {
         &self,
         txhash: TxHash,
     ) -> http_types::Result<TransactionStatus> {
-        Ok(http_get(
-            self.endpoint,
-            &format!("wallets/{}/transactions/{}", self.wallet_name, txhash),
+        Ok(successful(
+            http_get(
+                self.endpoint,
+                &format!("wallets/{}/transactions/{}", self.wallet_name, txhash),
+            )
+            .await?,
         )
         .await?
         .body_json()
@@ -141,11 +189,14 @@ impl WalletClient {
 
     /// Adds a coin
     pub async fn add_coin(&self, coin_id: CoinID) -> http_types::Result<()> {
-        http_with_body(
-            self.endpoint,
-            &format!("wallets/{}/coins/{}", &self.wallet_name, coin_id),
-            Method::Put,
-            vec![],
+        successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/coins/{}", &self.wallet_name, coin_id),
+                Method::Put,
+                vec![],
+            )
+            .await?,
         )
         .await?;
         Ok(())
@@ -153,9 +204,12 @@ impl WalletClient {
 
     /// Obtains the current wallet summary.
     pub async fn summary(&self) -> http_types::Result<WalletSummary> {
-        Ok(http_get(
-            self.endpoint,
-            &format!("wallets/{}?summary=1", self.wallet_name),
+        Ok(successful(
+            http_get(
+                self.endpoint,
+                &format!("wallets/{}?summary=1", self.wallet_name),
+            )
+            .await?,
         )
         .await?
         .body_json()

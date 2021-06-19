@@ -6,7 +6,7 @@ use std::{convert::TryInto, io::Write, process::Stdio, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
 use tabwriter::TabWriter;
-use themelio_stf::{melvm::CovHash, CoinData, Denom, NetID, TxHash};
+use themelio_stf::{melvm::CovHash, CoinData, CoinID, Denom, NetID, TxHash};
 use tmelcrypt::{Ed25519SK, HashVal};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -17,6 +17,12 @@ enum Args {
         wargs: WalletArgs,
         #[structopt(long)]
         testnet: bool,
+    },
+    /// Add a coin to a wallet
+    AddCoin {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+        coin: CoinID,
     },
     /// List all available wallets
     List(CommonArgs),
@@ -38,8 +44,13 @@ enum Args {
         /// A string specifying who to send money to, in the format "dest,amount[,denom[,additional_data]]". For example, --to $ADDRESS,1 sends 1 µMEL to $ADDRESS. Can be specified multiple times to send money to multiple addresses.
         to: Vec<CoinDataWrapper>,
         #[structopt(long)]
-        /// Hexadecimal secret key
-        secret: String,
+        /// Hexadecimal secret key. Optional if the wallet is unlocked.
+        secret: Option<String>,
+    },
+    /// Unlocks a wallet. Will read password from stdin.
+    UnlockWallet {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
     },
 }
 
@@ -159,7 +170,7 @@ impl Drop for KillOnDrop {
 
 fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
-        let mut stdin = smol::Unblock::new(std::io::stdin());
+        let mut stdin = smol::io::BufReader::new(smol::Unblock::new(std::io::stdin()));
         let mut twriter = TabWriter::new(std::io::stderr());
         let args = Args::from_args();
         match args {
@@ -202,10 +213,18 @@ fn main() -> http_types::Result<()> {
                 let txhash = wallet.wallet().await?.send_faucet().await?;
                 write_txhash(&mut twriter, &wallet.wallet, txhash)?;
             }
+            Args::AddCoin { wargs, coin } => {
+                let _daemon = wargs.common.start_daemon().await?;
+                wargs.wallet().await?.add_coin(coin).await?;
+                writeln!(twriter, "Coin successfully added!")?;
+                let summary = wargs.wallet().await?.summary().await?;
+                write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
+            }
             Args::SendTx { wargs, to, secret } => {
                 let _daemon = wargs.common.start_daemon().await?;
                 let wallet = wargs.wallet().await?;
-                let secret = Ed25519SK(hex::decode(&secret)?.try_into().unwrap());
+                let secret = secret
+                    .map(|secret| Ed25519SK(hex::decode(&secret).unwrap().try_into().unwrap()));
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
                 let tx = wallet
                     .prepare_transaction(desired_outputs.clone(), secret)
@@ -271,6 +290,14 @@ fn main() -> http_types::Result<()> {
                     smol::Timer::after(Duration::from_secs(1)).await;
                 }
             },
+            Args::UnlockWallet { wargs } => {
+                let _daemon = wargs.common.start_daemon().await?;
+                let wallet = wargs.wallet().await?;
+                eprintln!("Enter password: ");
+                let mut pwd = "".to_string();
+                stdin.read_line(&mut pwd).await?;
+                wallet.unlock(Some(pwd)).await?;
+            }
         }
         twriter.flush()?;
         Ok(())
