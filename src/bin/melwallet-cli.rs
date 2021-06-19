@@ -293,7 +293,7 @@ fn main() -> http_types::Result<()> {
             Args::UnlockWallet { wargs } => {
                 let _daemon = wargs.common.start_daemon().await?;
                 let wallet = wargs.wallet().await?;
-                eprintln!("Enter password: ");
+                eprint!("Enter password: ");
                 let mut pwd = "".to_string();
                 stdin.read_line(&mut pwd).await?;
                 wallet.unlock(Some(pwd)).await?;
