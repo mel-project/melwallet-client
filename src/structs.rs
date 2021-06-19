@@ -15,6 +15,7 @@ pub struct WalletSummary {
     pub network: NetID,
     #[serde(with = "stdcode::asstr")]
     pub address: CovHash,
+    pub locked: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

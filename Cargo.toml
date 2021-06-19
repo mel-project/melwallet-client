@@ -28,3 +28,5 @@ serde_with="1.9"
 colored="2"
 tabwriter={version="1", features=["ansi_formatting"]}
 hex="0.4"
+once_cell = "1.8.0"
+getrandom = "0.2.3"

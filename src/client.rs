@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    convert::TryInto,
     net::SocketAddr,
 };
 
@@ -25,7 +24,10 @@ impl DaemonClient {
 
     /// Lists all the wallets
     pub async fn list_wallets(&self) -> http_types::Result<BTreeMap<String, WalletSummary>> {
-        http_get(self.endpoint, "wallets").await?.body_json().await
+        successful(http_get(self.endpoint, "wallets").await?)
+            .await?
+            .body_json()
+            .await
     }
 
     /// Create a wallet
@@ -51,19 +53,31 @@ impl DaemonClient {
     }
 
     /// Creates a wallet
-    pub async fn create_wallet(&self, name: &str, testnet: bool) -> http_types::Result<Ed25519SK> {
+    pub async fn create_wallet(
+        &self,
+        name: &str,
+        testnet: bool,
+        password: Option<String>,
+    ) -> http_types::Result<()> {
         let mut adhoc_obj = BTreeMap::new();
-        adhoc_obj.insert("testnet".to_string(), testnet);
-        let hexstr: String = http_with_body(
-            self.endpoint,
-            &format!("wallets/{}", name),
-            Method::Put,
-            serde_json::to_value(&adhoc_obj).unwrap(),
+        adhoc_obj.insert(
+            "testnet".to_string(),
+            serde_json::to_value(testnet).unwrap(),
+        );
+        if let Some(pwd) = password {
+            adhoc_obj.insert("password".to_string(), serde_json::to_value(pwd).unwrap());
+        }
+        successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}", name),
+                Method::Put,
+                serde_json::to_value(&adhoc_obj).unwrap(),
+            )
+            .await?,
         )
-        .await?
-        .body_json()
         .await?;
-        Ok(Ed25519SK(hex::decode(&hexstr)?.try_into().unwrap()))
+        Ok(())
     }
 }
 
@@ -88,10 +102,25 @@ async fn successful(mut resp: Response) -> http_types::Result<Response> {
 }
 
 impl WalletClient {
+    /// Lock a wallet
+    pub async fn lock(&self) -> http_types::Result<()> {
+        successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/lock", self.wallet_name),
+                Method::Post,
+                vec![],
+            )
+            .await?,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Unlock a wallet
     pub async fn unlock(&self, password: Option<String>) -> http_types::Result<()> {
         let mut val = HashMap::new();
-        val.insert("pwd", password);
+        val.insert("password", password);
         successful(
             http_with_body(
                 self.endpoint,
@@ -217,16 +246,19 @@ impl WalletClient {
     }
 }
 
+static AUTH_TOKEN: once_cell::sync::Lazy<Option<String>> =
+    once_cell::sync::Lazy::new(|| std::env::var("MELWALLETD_AUTH_TOKEN").ok());
+
 async fn http_get(endpoint: SocketAddr, path: &str) -> http_types::Result<Response> {
     let conn = TcpStream::connect(endpoint).await?;
-    Ok(async_h1::connect(
-        conn,
-        Request::new(
-            Method::Get,
-            Url::parse(&format!("http://{}/{}", endpoint, path))?,
-        ),
-    )
-    .await?)
+    let mut req = Request::new(
+        Method::Get,
+        Url::parse(&format!("http://{}/{}", endpoint, path))?,
+    );
+    if let Some(token) = AUTH_TOKEN.as_ref() {
+        req.insert_header("X-Melwalletd-Auth-Token", token);
+    }
+    Ok(async_h1::connect(conn, req).await?)
 }
 
 async fn http_with_body(
@@ -240,6 +272,9 @@ async fn http_with_body(
         Url::parse(&format!("http://{}/{}", endpoint, path))?,
     );
     req.set_body(body);
+    if let Some(token) = AUTH_TOKEN.as_ref() {
+        req.insert_header("X-Melwalletd-Auth-Token", token);
+    }
     let conn = TcpStream::connect(endpoint).await?;
     Ok(async_h1::connect(conn, req).await?)
 }

@@ -2,7 +2,7 @@ use anyhow::Context;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 use smol::{prelude::*, process::Child};
-use std::{convert::TryInto, io::Write, process::Stdio, time::Duration};
+use std::{convert::TryInto, io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
 use tabwriter::TabWriter;
@@ -12,7 +12,7 @@ use tmelcrypt::{Ed25519SK, HashVal};
 #[derive(StructOpt, Clone, Debug)]
 enum Args {
     /// Create a wallet
-    CreateWallet {
+    Create {
         #[structopt(flatten)]
         wargs: WalletArgs,
         #[structopt(long)]
@@ -48,7 +48,12 @@ enum Args {
         secret: Option<String>,
     },
     /// Unlocks a wallet. Will read password from stdin.
-    UnlockWallet {
+    Unlock {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+    },
+    /// Locks a wallet down again.
+    Lock {
         #[structopt(flatten)]
         wargs: WalletArgs,
     },
@@ -128,33 +133,11 @@ struct CommonArgs {
     #[structopt(long, default_value = "127.0.0.1:11773")]
     /// HTTP endpoint of a running melwalletd instance
     endpoint: SocketAddr,
-
-    /// Automatically start the wallet daemon. This will always create wallets in $HOME/.auto-melwallet
-    #[structopt(short, long)]
-    autostart: bool,
 }
 
 impl CommonArgs {
     fn dclient(&self) -> DaemonClient {
         DaemonClient::new(self.endpoint)
-    }
-
-    async fn start_daemon(&self) -> anyhow::Result<KillOnDrop> {
-        if self.autostart {
-            let mut home_dir = dirs::home_dir().context("cannot obtain home directory")?;
-            home_dir.push(".auto-melwallet");
-            let child = smol::process::Command::new("melwalletd")
-                .arg("--wallet-dir")
-                .arg(&home_dir.as_os_str())
-                .stderr(Stdio::null())
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .spawn()?;
-            smol::Timer::after(Duration::from_millis(100)).await;
-            Ok(KillOnDrop(Some(child)))
-        } else {
-            Ok(KillOnDrop(None))
-        }
     }
 }
 
@@ -174,10 +157,15 @@ fn main() -> http_types::Result<()> {
         let mut twriter = TabWriter::new(std::io::stderr());
         let args = Args::from_args();
         match args {
-            Args::CreateWallet { wargs, testnet } => {
-                let _daemon = wargs.common.start_daemon().await?;
+            Args::Create { wargs, testnet } => {
                 let dclient = wargs.common.dclient();
-                let new_secret = dclient.create_wallet(&wargs.wallet, testnet).await?;
+                eprint!("Enter password: ");
+                let mut pwd = "".to_string();
+                stdin.read_line(&mut pwd).await?;
+                pwd.truncate(pwd.len() - 1);
+                dclient
+                    .create_wallet(&wargs.wallet, testnet, Some(pwd))
+                    .await?;
                 let summary = dclient
                     .list_wallets()
                     .await?
@@ -187,15 +175,8 @@ fn main() -> http_types::Result<()> {
                 write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
                 writeln!(twriter)?;
                 twriter.flush()?;
-                writeln!(
-                    twriter,
-                    "{}:\t{}",
-                    "SECRET KEY (write this down)".bold(),
-                    hex::encode(new_secret.0).bright_red()
-                )?;
             }
             Args::List(common) => {
-                let _daemon = common.start_daemon().await?;
                 let dclient = common.dclient();
                 let wallets = dclient.list_wallets().await?;
                 for (name, summary) in wallets {
@@ -204,24 +185,20 @@ fn main() -> http_types::Result<()> {
                 }
             }
             Args::Summary(wallet) => {
-                let _daemon = wallet.common.start_daemon().await?;
                 let summary = wallet.wallet().await?.summary().await?;
                 write_wallet_summary(&mut twriter, &wallet.wallet, &summary)?;
             }
             Args::SendFaucet(wallet) => {
-                let _daemon = wallet.common.start_daemon().await?;
                 let txhash = wallet.wallet().await?.send_faucet().await?;
                 write_txhash(&mut twriter, &wallet.wallet, txhash)?;
             }
             Args::AddCoin { wargs, coin } => {
-                let _daemon = wargs.common.start_daemon().await?;
                 wargs.wallet().await?.add_coin(coin).await?;
                 writeln!(twriter, "Coin successfully added!")?;
                 let summary = wargs.wallet().await?.summary().await?;
                 write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
             }
             Args::SendTx { wargs, to, secret } => {
-                let _daemon = wargs.common.start_daemon().await?;
                 let wallet = wargs.wallet().await?;
                 let secret = secret
                     .map(|secret| Ed25519SK(hex::decode(&secret).unwrap().try_into().unwrap()));
@@ -263,7 +240,6 @@ fn main() -> http_types::Result<()> {
                 }
             }
             Args::WaitConfirmation { wargs, txhash } => loop {
-                let _daemon = wargs.common.start_daemon().await?;
                 let wallet = wargs.wallet().await?;
                 let wallet_dump = wargs
                     .common
@@ -290,13 +266,17 @@ fn main() -> http_types::Result<()> {
                     smol::Timer::after(Duration::from_secs(1)).await;
                 }
             },
-            Args::UnlockWallet { wargs } => {
-                let _daemon = wargs.common.start_daemon().await?;
+            Args::Unlock { wargs } => {
                 let wallet = wargs.wallet().await?;
                 eprint!("Enter password: ");
                 let mut pwd = "".to_string();
                 stdin.read_line(&mut pwd).await?;
+                pwd.truncate(pwd.len() - 1);
                 wallet.unlock(Some(pwd)).await?;
+            }
+            Args::Lock { wargs } => {
+                let wallet = wargs.wallet().await?;
+                wallet.lock().await?;
             }
         }
         twriter.flush()?;
@@ -309,7 +289,16 @@ fn write_wallet_summary(
     wallet_name: &str,
     summary: &WalletSummary,
 ) -> anyhow::Result<()> {
-    writeln!(out, "Wallet name:\t{}", wallet_name.bold())?;
+    writeln!(
+        out,
+        "Wallet name:\t{} {}",
+        wallet_name.bold(),
+        if summary.locked {
+            "(locked)".red()
+        } else {
+            "(unlocked)".green()
+        }
+    )?;
     writeln!(
         out,
         "Network:\t{}",
