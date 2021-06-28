@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
@@ -5,7 +6,7 @@ use std::{
 
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
-use themelio_stf::{CoinData, CoinID, Transaction, TxHash};
+use themelio_stf::{CoinData, CoinID, HexBytes, PoolKey, PoolState, Transaction, TxHash, TxKind};
 use tmelcrypt::Ed25519SK;
 
 use crate::{structs::WalletSummary, TransactionStatus, WalletDump};
@@ -78,6 +79,27 @@ impl DaemonClient {
         )
         .await?;
         Ok(())
+    }
+
+    /// Obtains pool info.
+    pub async fn get_pool(&self, pool: PoolKey, testnet: bool) -> http_types::Result<PoolState> {
+        Ok(successful(
+            http_get(
+                self.endpoint,
+                &format!(
+                    "pools/{}?{}",
+                    pool.to_canonical()
+                        .context("oh no")?
+                        .to_string()
+                        .replace("/", ":"),
+                    if testnet { "testnet=1" } else { "" }
+                ),
+            )
+            .await?,
+        )
+        .await?
+        .body_json()
+        .await?)
     }
 }
 
@@ -171,14 +193,18 @@ impl WalletClient {
     /// Obtain a prepared transaction
     pub async fn prepare_transaction(
         &self,
+        kind: TxKind,
         desired_outputs: Vec<CoinData>,
         secret: Option<Ed25519SK>,
+        data: Vec<u8>,
     ) -> http_types::Result<Transaction> {
         let mut adhoc = BTreeMap::new();
+        adhoc.insert("kind".to_string(), serde_json::to_value(&kind)?);
         adhoc.insert(
             "outputs".to_string(),
             serde_json::to_value(&desired_outputs)?,
         );
+        adhoc.insert("data".to_string(), serde_json::to_value(&HexBytes(data))?);
         if let Some(secret) = secret {
             adhoc.insert(
                 "signing_key".to_string(),

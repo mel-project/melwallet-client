@@ -6,7 +6,7 @@ use std::{convert::TryInto, io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
 use tabwriter::TabWriter;
-use themelio_stf::{melvm::CovHash, CoinData, CoinID, Denom, NetID, TxHash};
+use themelio_stf::{melvm::Address, CoinData, CoinID, Denom, NetID, PoolKey, TxHash, TxKind};
 use tmelcrypt::{Ed25519SK, HashVal};
 
 #[derive(StructOpt, Clone, Debug)]
@@ -36,6 +36,22 @@ enum Args {
         wargs: WalletArgs,
         txhash: HashVal,
     },
+    /// Swaps money from one denomination to another
+    Swap {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+        /// How much money to swap
+        value: Option<u128>,
+        #[structopt(long, short)]
+        /// "From" denomination.
+        from: Denom,
+        #[structopt(long, short)]
+        /// "To" denomination.
+        to: Denom,
+        /// Whether or not to wait.
+        #[structopt(long)]
+        wait: bool,
+    },
     /// Send a transaction to the network
     SendTx {
         #[structopt(flatten)]
@@ -57,6 +73,17 @@ enum Args {
         #[structopt(flatten)]
         wargs: WalletArgs,
     },
+    /// Checks a pool.
+    Pool {
+        #[structopt(flatten)]
+        common: CommonArgs,
+        #[structopt(long)]
+        /// Whether or not to use the testnet.
+        testnet: bool,
+
+        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/N-DOSC).
+        pool: PoolKey,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -68,7 +95,7 @@ impl FromStr for CoinDataWrapper {
         let exploded = s.split(',').collect::<Vec<_>>();
         match exploded.as_slice() {
             [dest, amount] => {
-                let dest: CovHash = dest.parse()?;
+                let dest: Address = dest.parse()?;
                 let amount: u128 = amount.parse()?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
@@ -78,7 +105,7 @@ impl FromStr for CoinDataWrapper {
                 }))
             }
             [dest, amount, denom] => {
-                let dest: CovHash = dest.parse()?;
+                let dest: Address = dest.parse()?;
                 let amount: u128 = amount.parse()?;
                 let denom: Vec<u8> = hex::decode(&denom)?;
                 Ok(CoinDataWrapper(CoinData {
@@ -89,7 +116,7 @@ impl FromStr for CoinDataWrapper {
                 }))
             }
             &[dest, amount, denom, additional_data] => {
-                let dest: CovHash = dest.parse()?;
+                let dest: Address = dest.parse()?;
                 let amount: u128 = amount.parse()?;
                 let denom: Vec<u8> = hex::decode(&denom)?;
                 let additional_data: Vec<u8> = hex::decode(&additional_data)?;
@@ -151,6 +178,37 @@ impl Drop for KillOnDrop {
     }
 }
 
+async fn wait_tx(wargs: &WalletArgs, txhash: TxHash) -> http_types::Result<()> {
+    loop {
+        let wallet = wargs.wallet().await?;
+        let wallet_dump = wargs
+            .common
+            .dclient()
+            .dump_wallet(&wargs.wallet)
+            .await?
+            .unwrap();
+        let status = wallet.get_transaction_status(txhash).await?;
+        if let Some(height) = status.confirmed_height {
+            eprintln!("Confirmed at height {}", height);
+            eprintln!(
+                "(in block explorer: https://{}/blocks/{}/{})",
+                if wallet_dump.summary.network == NetID::Testnet {
+                    "scan-testnet.themelio.org"
+                } else {
+                    "scan.themelio.org"
+                },
+                height,
+                txhash
+            );
+            break;
+        } else {
+            eprint!("{}", ".".yellow());
+            smol::Timer::after(Duration::from_secs(1)).await;
+        }
+    }
+    Ok(())
+}
+
 fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
         let mut stdin = smol::io::BufReader::new(smol::Unblock::new(std::io::stdin()));
@@ -204,7 +262,7 @@ fn main() -> http_types::Result<()> {
                     .map(|secret| Ed25519SK(hex::decode(&secret).unwrap().try_into().unwrap()));
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
                 let tx = wallet
-                    .prepare_transaction(desired_outputs.clone(), secret)
+                    .prepare_transaction(TxKind::Normal, desired_outputs.clone(), secret, vec![])
                     .await?;
                 writeln!(twriter, "{}", "TRANSACTION RECIPIENTS".bold())?;
                 writeln!(twriter, "{}", "Address\tAmount\tAdditional data".italic())?;
@@ -231,41 +289,11 @@ fn main() -> http_types::Result<()> {
                     tx.fee.to_string()
                 )?;
                 twriter.flush()?;
-                eprint!("Proceed? [y/N] ");
-                let mut letter = [0u8; 1];
-                stdin.read_exact(&mut letter).await?;
-                if letter[0] == 0x79 {
-                    let txhash = wallet.send_tx(tx).await?;
-                    write_txhash(&mut twriter, &wargs.wallet, txhash)?;
-                }
+                proceed_prompt(&mut stdin).await?;
+                let txhash = wallet.send_tx(tx).await?;
+                write_txhash(&mut twriter, &wargs.wallet, txhash)?;
             }
-            Args::WaitConfirmation { wargs, txhash } => loop {
-                let wallet = wargs.wallet().await?;
-                let wallet_dump = wargs
-                    .common
-                    .dclient()
-                    .dump_wallet(&wargs.wallet)
-                    .await?
-                    .unwrap();
-                let status = wallet.get_transaction_status(TxHash(txhash)).await?;
-                if let Some(height) = status.confirmed_height {
-                    eprintln!("Confirmed at height {}", height);
-                    eprintln!(
-                        "(in block explorer: https://{}/blocks/{}/{})",
-                        if wallet_dump.summary.network == NetID::Testnet {
-                            "scan-testnet.themelio.org"
-                        } else {
-                            "scan.themelio.org"
-                        },
-                        height,
-                        txhash
-                    );
-                    break;
-                } else {
-                    eprint!("{}", ".".yellow());
-                    smol::Timer::after(Duration::from_secs(1)).await;
-                }
-            },
+            Args::WaitConfirmation { wargs, txhash } => wait_tx(&wargs, TxHash(txhash)).await?,
             Args::Unlock { wargs } => {
                 let wallet = wargs.wallet().await?;
                 eprint!("Enter password: ");
@@ -277,6 +305,94 @@ fn main() -> http_types::Result<()> {
             Args::Lock { wargs } => {
                 let wallet = wargs.wallet().await?;
                 wallet.lock().await?;
+            }
+            Args::Pool {
+                common,
+                pool,
+                testnet,
+            } => {
+                let pool = pool.to_canonical().context("cannot canonicalize")?;
+                let client = common.dclient();
+                let pool_state = client.get_pool(pool, testnet).await?;
+                let ratio = pool_state.lefts as f64 / pool_state.rights as f64;
+                writeln!(
+                    twriter,
+                    "{} {}\t= {} {}",
+                    "1".bold().bright_green(),
+                    pool.left.to_string().italic(),
+                    format!("{}", 1.0 / ratio).bold().yellow(),
+                    pool.right.to_string().italic()
+                )?;
+                writeln!(
+                    twriter,
+                    "{} {}\t= {} {}",
+                    "1".bold().yellow(),
+                    pool.right.to_string().italic(),
+                    format!("{}", ratio).bold().bright_green(),
+                    pool.left.to_string().italic()
+                )?;
+            }
+            Args::Swap {
+                wargs,
+                value,
+                from,
+                to,
+                wait,
+            } => {
+                let wallet = wargs.wallet().await?;
+                let max_value =
+                    wallet.summary().await?.detailed_balance[&hex::encode(from.to_bytes())];
+                let max_value = if from == Denom::Mel {
+                    max_value / 2
+                } else {
+                    max_value
+                };
+                let value = value.unwrap_or(max_value);
+                let pool_key = PoolKey::new(from, to);
+                let to_send = wallet
+                    .prepare_transaction(
+                        TxKind::Swap,
+                        vec![CoinData {
+                            value,
+                            denom: from,
+                            additional_data: vec![],
+                            covhash: wallet.summary().await?.address,
+                        }],
+                        None,
+                        pool_key.to_bytes(),
+                    )
+                    .await?;
+                writeln!(twriter, "{}", "SWAPPING".bold())?;
+                writeln!(
+                    twriter,
+                    "From:\t{} µ{}",
+                    value.to_string().bold().bright_green(),
+                    from.to_string()
+                )?;
+                let pool_state = wargs
+                    .common
+                    .dclient()
+                    .get_pool(pool_key, wallet.summary().await?.network == NetID::Testnet)
+                    .await?;
+                let ratio = pool_state.lefts as f64 / pool_state.rights as f64;
+                let to_value = if from == pool_key.right {
+                    (ratio * (value as f64)) as u128
+                } else {
+                    ((value as f64) / ratio) as u128
+                };
+                writeln!(
+                    twriter,
+                    "To:\t{} µ{} (approximate)",
+                    to_value.to_string().bold().yellow(),
+                    to.to_string()
+                )?;
+                twriter.flush()?;
+                proceed_prompt(&mut stdin).await?;
+                let txhash = wallet.send_tx(to_send).await?;
+                write_txhash(&mut twriter, &wargs.wallet, txhash)?;
+                if wait {
+                    wait_tx(&wargs, txhash).await?
+                }
             }
         }
         twriter.flush()?;
@@ -340,5 +456,15 @@ fn write_txhash(out: &mut impl Write, wallet_name: &str, txhash: TxHash) -> anyh
         )
         .bright_blue(),
     )?;
+    Ok(())
+}
+
+async fn proceed_prompt(stdin: &mut (impl AsyncRead + Unpin)) -> anyhow::Result<()> {
+    eprint!("Proceed? [y/N] ");
+    let mut letter = [0u8; 1];
+    stdin.read_exact(&mut letter).await?;
+    if letter[0] != 0x79 {
+        anyhow::bail!("canceled");
+    }
     Ok(())
 }

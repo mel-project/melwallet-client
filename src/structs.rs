@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use themelio_stf::{
-    melvm::{CovHash, Covenant},
+    melvm::{Address, Covenant},
     CoinData, CoinDataHeight, CoinID, NetID, Transaction,
 };
 use tmelcrypt::HashVal;
@@ -14,7 +14,7 @@ pub struct WalletSummary {
     pub detailed_balance: BTreeMap<String, u128>,
     pub network: NetID,
     #[serde(with = "stdcode::asstr")]
-    pub address: CovHash,
+    pub address: Address,
     pub locked: bool,
 }
 
