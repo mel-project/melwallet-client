@@ -1,4 +1,3 @@
-use anyhow::Context;
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
@@ -9,7 +8,7 @@ use smol::net::TcpStream;
 use themelio_stf::{CoinData, CoinID, HexBytes, PoolKey, PoolState, Transaction, TxHash, TxKind};
 use tmelcrypt::Ed25519SK;
 
-use crate::{structs::WalletSummary, TransactionStatus, WalletDump};
+use crate::{structs::WalletSummary, DaemonError, TransactionStatus, WalletDump};
 
 /// A client to a particular wallet daemon.
 #[derive(Clone, Debug)]
@@ -24,15 +23,15 @@ impl DaemonClient {
     }
 
     /// Lists all the wallets
-    pub async fn list_wallets(&self) -> http_types::Result<BTreeMap<String, WalletSummary>> {
-        successful(http_get(self.endpoint, "wallets").await?)
+    pub async fn list_wallets(&self) -> Result<BTreeMap<String, WalletSummary>, DaemonError> {
+        Ok(successful(http_get(self.endpoint, "wallets").await?)
             .await?
             .body_json()
-            .await
+            .await?)
     }
 
     /// Create a wallet
-    pub async fn dump_wallet(&self, name: &str) -> http_types::Result<Option<WalletDump>> {
+    pub async fn dump_wallet(&self, name: &str) -> Result<Option<WalletDump>, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", name)).await?;
         if resp.status() == StatusCode::NotFound {
             return Ok(None);
@@ -41,9 +40,9 @@ impl DaemonClient {
     }
 
     /// Gets a wallet
-    pub async fn get_wallet(&self, name: &str) -> http_types::Result<Option<WalletClient>> {
+    pub async fn get_wallet(&self, name: &str) -> Result<Option<WalletClient>, DaemonError> {
         // needs to be dumpable
-        if let Some(_dump) = self.dump_wallet(name).await? {
+        if self.dump_wallet(name).await?.is_some() {
             Ok(Some(WalletClient {
                 endpoint: self.endpoint,
                 wallet_name: name.to_string(),
@@ -59,7 +58,7 @@ impl DaemonClient {
         name: &str,
         testnet: bool,
         password: Option<String>,
-    ) -> http_types::Result<()> {
+    ) -> Result<(), DaemonError> {
         let mut adhoc_obj = BTreeMap::new();
         adhoc_obj.insert(
             "testnet".to_string(),
@@ -82,14 +81,14 @@ impl DaemonClient {
     }
 
     /// Obtains pool info.
-    pub async fn get_pool(&self, pool: PoolKey, testnet: bool) -> http_types::Result<PoolState> {
+    pub async fn get_pool(&self, pool: PoolKey, testnet: bool) -> Result<PoolState, DaemonError> {
         Ok(successful(
             http_get(
                 self.endpoint,
                 &format!(
                     "pools/{}?{}",
                     pool.to_canonical()
-                        .context("oh no")?
+                        .expect("daemon returned uncanonicalizable pool")
                         .to_string()
                         .replace("/", ":"),
                     if testnet { "testnet=1" } else { "" }
@@ -110,22 +109,17 @@ pub struct WalletClient {
     wallet_name: String,
 }
 
-async fn successful(mut resp: Response) -> http_types::Result<Response> {
+async fn successful(mut resp: Response) -> Result<Response, DaemonError> {
     if resp.status() == StatusCode::Ok {
         Ok(resp)
     } else {
-        return Err(anyhow::anyhow!(
-            "non-200 response: ({}) {}",
-            resp.status(),
-            resp.body_string().await?
-        )
-        .into());
+        return Err(DaemonError::Other(resp.body_string().await?));
     }
 }
 
 impl WalletClient {
     /// Lock a wallet
-    pub async fn lock(&self) -> http_types::Result<()> {
+    pub async fn lock(&self) -> Result<(), DaemonError> {
         successful(
             http_with_body(
                 self.endpoint,
@@ -140,7 +134,7 @@ impl WalletClient {
     }
 
     /// Unlock a wallet
-    pub async fn unlock(&self, password: Option<String>) -> http_types::Result<()> {
+    pub async fn unlock(&self, password: Option<String>) -> Result<(), DaemonError> {
         let mut val = HashMap::new();
         val.insert("password", password);
         successful(
@@ -148,7 +142,7 @@ impl WalletClient {
                 self.endpoint,
                 &format!("wallets/{}/unlock", self.wallet_name),
                 Method::Post,
-                serde_json::to_vec(&val)?,
+                serde_json::to_vec(&val).map_err(http_types::Error::from)?,
             )
             .await?,
         )
@@ -157,7 +151,7 @@ impl WalletClient {
     }
 
     /// Send a 1000 MEL faucet transaction
-    pub async fn send_faucet(&self) -> http_types::Result<TxHash> {
+    pub async fn send_faucet(&self) -> Result<TxHash, DaemonError> {
         let hash_string: String = successful(
             http_with_body(
                 self.endpoint,
@@ -170,24 +164,28 @@ impl WalletClient {
         .await?
         .body_json()
         .await?;
-        Ok(TxHash(hash_string.parse()?))
+        Ok(TxHash(
+            hash_string.parse().map_err(http_types::Error::from)?,
+        ))
     }
 
     /// Send a transaction
-    pub async fn send_tx(&self, tx: Transaction) -> http_types::Result<TxHash> {
+    pub async fn send_tx(&self, tx: Transaction) -> Result<TxHash, DaemonError> {
         let hash_string: String = successful(
             http_with_body(
                 self.endpoint,
                 &format!("wallets/{}/send-tx", self.wallet_name),
                 Method::Post,
-                serde_json::to_value(tx)?,
+                serde_json::to_value(tx).map_err(http_types::Error::from)?,
             )
             .await?,
         )
         .await?
         .body_json()
         .await?;
-        Ok(TxHash(hash_string.parse()?))
+        Ok(TxHash(
+            hash_string.parse().map_err(http_types::Error::from)?,
+        ))
     }
 
     /// Obtain a prepared transaction
@@ -197,32 +195,35 @@ impl WalletClient {
         desired_outputs: Vec<CoinData>,
         secret: Option<Ed25519SK>,
         data: Vec<u8>,
-    ) -> http_types::Result<Transaction> {
+    ) -> Result<Transaction, DaemonError> {
         let mut adhoc = BTreeMap::new();
-        adhoc.insert("kind".to_string(), serde_json::to_value(&kind)?);
+        adhoc.insert("kind".to_string(), serde_json::to_value(&kind).unwrap());
         adhoc.insert(
             "outputs".to_string(),
-            serde_json::to_value(&desired_outputs)?,
+            serde_json::to_value(&desired_outputs).unwrap(),
         );
-        adhoc.insert("data".to_string(), serde_json::to_value(&HexBytes(data))?);
+        adhoc.insert(
+            "data".to_string(),
+            serde_json::to_value(&HexBytes(data)).unwrap(),
+        );
         if let Some(secret) = secret {
             adhoc.insert(
                 "signing_key".to_string(),
-                serde_json::to_value(hex::encode(&secret.0))?,
+                serde_json::to_value(hex::encode(&secret.0)).unwrap(),
             );
         }
-        successful(
+        Ok(successful(
             http_with_body(
                 self.endpoint,
                 &format!("wallets/{}/prepare-tx", self.wallet_name),
                 Method::Post,
-                serde_json::to_vec(&adhoc)?,
+                serde_json::to_vec(&adhoc).unwrap(),
             )
             .await?,
         )
         .await?
         .body_json()
-        .await
+        .await?)
     }
 
     /// Check on a transaction, by transaction hash

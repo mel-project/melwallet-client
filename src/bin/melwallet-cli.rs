@@ -1,4 +1,5 @@
 use anyhow::Context;
+use autoswap::do_autoswap;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 use smol::{prelude::*, process::Child};
@@ -8,6 +9,7 @@ use structopt::StructOpt;
 use tabwriter::TabWriter;
 use themelio_stf::{melvm::Address, CoinData, CoinID, Denom, NetID, PoolKey, TxHash, TxKind};
 use tmelcrypt::{Ed25519SK, HashVal};
+mod autoswap;
 
 #[derive(StructOpt, Clone, Debug)]
 enum Args {
@@ -52,8 +54,15 @@ enum Args {
         #[structopt(long)]
         wait: bool,
     },
+    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/NOM-DOSC pairs
+    Autoswap {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+        /// How much money to swap
+        value: u128,
+    },
     /// Send a transaction to the network
-    SendTx {
+    Send {
         #[structopt(flatten)]
         wargs: WalletArgs,
         #[structopt(long)]
@@ -107,23 +116,21 @@ impl FromStr for CoinDataWrapper {
             [dest, amount, denom] => {
                 let dest: Address = dest.parse()?;
                 let amount: u128 = amount.parse()?;
-                let denom: Vec<u8> = hex::decode(&denom)?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
                     value: amount,
-                    denom: Denom::from_bytes(&denom).context("invalid denomination")?,
+                    denom: denom.parse()?,
                     additional_data: vec![],
                 }))
             }
             &[dest, amount, denom, additional_data] => {
                 let dest: Address = dest.parse()?;
                 let amount: u128 = amount.parse()?;
-                let denom: Vec<u8> = hex::decode(&denom)?;
                 let additional_data: Vec<u8> = hex::decode(&additional_data)?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
                     value: amount,
-                    denom: Denom::from_bytes(&denom).context("invalid denomination")?,
+                    denom: denom.parse()?,
                     additional_data,
                 }))
             }
@@ -178,21 +185,14 @@ impl Drop for KillOnDrop {
     }
 }
 
-async fn wait_tx(wargs: &WalletArgs, txhash: TxHash) -> http_types::Result<()> {
+async fn wait_tx(wallet: &WalletClient, txhash: TxHash) -> http_types::Result<()> {
     loop {
-        let wallet = wargs.wallet().await?;
-        let wallet_dump = wargs
-            .common
-            .dclient()
-            .dump_wallet(&wargs.wallet)
-            .await?
-            .unwrap();
         let status = wallet.get_transaction_status(txhash).await?;
         if let Some(height) = status.confirmed_height {
             eprintln!("Confirmed at height {}", height);
             eprintln!(
                 "(in block explorer: https://{}/blocks/{}/{})",
-                if wallet_dump.summary.network == NetID::Testnet {
+                if wallet.summary().await?.network == NetID::Testnet {
                     "scan-testnet.themelio.org"
                 } else {
                     "scan.themelio.org"
@@ -256,7 +256,7 @@ fn main() -> http_types::Result<()> {
                 let summary = wargs.wallet().await?.summary().await?;
                 write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
             }
-            Args::SendTx { wargs, to, secret } => {
+            Args::Send { wargs, to, secret } => {
                 let wallet = wargs.wallet().await?;
                 let secret = secret
                     .map(|secret| Ed25519SK(hex::decode(&secret).unwrap().try_into().unwrap()));
@@ -293,7 +293,9 @@ fn main() -> http_types::Result<()> {
                 let txhash = wallet.send_tx(tx).await?;
                 write_txhash(&mut twriter, &wargs.wallet, txhash)?;
             }
-            Args::WaitConfirmation { wargs, txhash } => wait_tx(&wargs, TxHash(txhash)).await?,
+            Args::WaitConfirmation { wargs, txhash } => {
+                wait_tx(&wargs.wallet().await?, TxHash(txhash)).await?
+            }
             Args::Unlock { wargs } => {
                 let wallet = wargs.wallet().await?;
                 eprint!("Enter password: ");
@@ -331,6 +333,11 @@ fn main() -> http_types::Result<()> {
                     format!("{}", ratio).bold().bright_green(),
                     pool.left.to_string().italic()
                 )?;
+            }
+            Args::Autoswap { wargs, value } => {
+                let daemon = wargs.common.dclient();
+                let wallet = wargs.wallet().await?;
+                do_autoswap(daemon, wallet, value).await;
             }
             Args::Swap {
                 wargs,
@@ -374,11 +381,10 @@ fn main() -> http_types::Result<()> {
                     .dclient()
                     .get_pool(pool_key, wallet.summary().await?.network == NetID::Testnet)
                     .await?;
-                let ratio = pool_state.lefts as f64 / pool_state.rights as f64;
                 let to_value = if from == pool_key.right {
-                    (ratio * (value as f64)) as u128
+                    pool_state.clone().swap_many(0, value).0
                 } else {
-                    ((value as f64) / ratio) as u128
+                    pool_state.clone().swap_many(value, 0).1
                 };
                 writeln!(
                     twriter,
@@ -391,7 +397,7 @@ fn main() -> http_types::Result<()> {
                 let txhash = wallet.send_tx(to_send).await?;
                 write_txhash(&mut twriter, &wargs.wallet, txhash)?;
                 if wait {
-                    wait_tx(&wargs, txhash).await?
+                    wait_tx(&wallet, txhash).await?
                 }
             }
         }
