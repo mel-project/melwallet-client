@@ -262,7 +262,14 @@ fn main() -> http_types::Result<()> {
                     .map(|secret| Ed25519SK(hex::decode(&secret).unwrap().try_into().unwrap()));
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
                 let tx = wallet
-                    .prepare_transaction(TxKind::Normal, desired_outputs.clone(), secret, vec![])
+                    .prepare_transaction(
+                        TxKind::Normal,
+                        vec![],
+                        desired_outputs.clone(),
+                        secret,
+                        vec![],
+                        vec![],
+                    )
                     .await?;
                 writeln!(twriter, "{}", "TRANSACTION RECIPIENTS".bold())?;
                 writeln!(twriter, "{}", "Address\tAmount\tAdditional data".italic())?;
@@ -359,6 +366,7 @@ fn main() -> http_types::Result<()> {
                 let to_send = wallet
                     .prepare_transaction(
                         TxKind::Swap,
+                        vec![],
                         vec![CoinData {
                             value,
                             denom: from,
@@ -367,6 +375,7 @@ fn main() -> http_types::Result<()> {
                         }],
                         None,
                         pool_key.to_bytes(),
+                        vec![],
                     )
                     .await?;
                 writeln!(twriter, "{}", "SWAPPING".bold())?;

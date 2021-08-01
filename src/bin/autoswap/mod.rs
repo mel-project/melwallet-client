@@ -82,6 +82,7 @@ async fn prepare_swap(
     Ok(wallet
         .prepare_transaction(
             TxKind::Swap,
+            vec![],
             vec![CoinData {
                 value: from_value,
                 denom: from,
@@ -90,6 +91,7 @@ async fn prepare_swap(
             }],
             None,
             PoolKey::new(from, to).to_bytes(),
+            vec![],
         )
         .await?)
 }

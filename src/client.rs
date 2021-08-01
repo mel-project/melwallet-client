@@ -5,7 +5,9 @@ use std::{
 
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
-use themelio_stf::{CoinData, CoinID, HexBytes, PoolKey, PoolState, Transaction, TxHash, TxKind};
+use themelio_stf::{
+    CoinData, CoinID, Denom, HexBytes, PoolKey, PoolState, Transaction, TxHash, TxKind,
+};
 use tmelcrypt::Ed25519SK;
 
 use crate::{structs::WalletSummary, DaemonError, TransactionStatus, WalletDump};
@@ -192,12 +194,18 @@ impl WalletClient {
     pub async fn prepare_transaction(
         &self,
         kind: TxKind,
+        desired_inputs: Vec<CoinID>,
         desired_outputs: Vec<CoinData>,
         secret: Option<Ed25519SK>,
         data: Vec<u8>,
+        no_balance: Vec<Denom>,
     ) -> Result<Transaction, DaemonError> {
         let mut adhoc = BTreeMap::new();
         adhoc.insert("kind".to_string(), serde_json::to_value(&kind).unwrap());
+        adhoc.insert(
+            "inputs".to_string(),
+            serde_json::to_value(&desired_inputs).unwrap(),
+        );
         adhoc.insert(
             "outputs".to_string(),
             serde_json::to_value(&desired_outputs).unwrap(),
@@ -205,6 +213,10 @@ impl WalletClient {
         adhoc.insert(
             "data".to_string(),
             serde_json::to_value(&HexBytes(data)).unwrap(),
+        );
+        adhoc.insert(
+            "nobalance".to_string(),
+            serde_json::to_value(&no_balance).unwrap(),
         );
         if let Some(secret) = secret {
             adhoc.insert(
