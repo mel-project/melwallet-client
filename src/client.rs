@@ -261,7 +261,9 @@ impl WalletClient {
         loop {
             match self.get_transaction_status(txhash).await?.confirmed_height {
                 Some(height) => return Ok(height),
-                None => smol::Timer::after(Duration::from_secs(10)).await,
+                None => {
+                    smol::Timer::after(Duration::from_secs(10)).await;
+                }
             }
         }
     }
