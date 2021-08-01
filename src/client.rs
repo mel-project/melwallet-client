@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
+    time::Duration,
 };
 
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
@@ -253,6 +254,16 @@ impl WalletClient {
         .await?
         .body_json()
         .await?)
+    }
+
+    /// Convenience method to wait until a transaction is confirmed
+    pub async fn wait_transaction(&self, txhash: TxHash) -> http_types::Result<u64> {
+        loop {
+            match self.get_transaction_status(txhash).await?.confirmed_height {
+                Some(height) => return Ok(height),
+                None => smol::Timer::after(Duration::from_secs(10)).await,
+            }
+        }
     }
 
     /// Adds a coin
