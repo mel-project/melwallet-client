@@ -7,8 +7,11 @@ use std::{convert::TryInto, io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
 use tabwriter::TabWriter;
-use themelio_stf::{melvm::Address, CoinData, CoinID, Denom, NetID, PoolKey, TxHash, TxKind};
-use tmelcrypt::{Ed25519SK, HashVal};
+use themelio_stf::{
+    melvm::Address, CoinData, CoinID, Denom, NetID, PoolKey, StakeDoc, Transaction, TxHash, TxKind,
+    STAKE_EPOCH,
+};
+use tmelcrypt::{Ed25519PK, Ed25519SK, HashVal};
 mod autoswap;
 
 #[derive(StructOpt, Clone, Debug)]
@@ -60,6 +63,21 @@ enum Args {
         wargs: WalletArgs,
         /// How much money to swap
         value: u128,
+    },
+    /// Stakes a certain number of syms.
+    Stake {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+        /// How many microsyms to stake
+        value: u128,
+        /// Ed25519 public key of the staker that receives voting rights
+        staker_pubkey: String,
+        /// When the stake takes effect. By default, as soon as possible.
+        #[structopt(long)]
+        start: Option<u64>,
+        /// How long will the stake last. By default, 1 epoch with 1 epoch waiting time.
+        #[structopt(long)]
+        duration: Option<u64>,
     },
     /// Send a transaction to the network
     Send {
@@ -271,34 +289,78 @@ fn main() -> http_types::Result<()> {
                         vec![],
                     )
                     .await?;
-                writeln!(twriter, "{}", "TRANSACTION RECIPIENTS".bold())?;
-                writeln!(twriter, "{}", "Address\tAmount\tAdditional data".italic())?;
-                for output in desired_outputs {
-                    writeln!(
-                        twriter,
-                        "{}\t{} {}\t{:?}",
-                        output.covhash.to_string().bright_blue(),
-                        output.value,
-                        match output.denom {
-                            Denom::Mel => "µMEL",
-                            Denom::Sym => "µSYM",
-                            Denom::NomDosc => "µnomDOSC",
-                            Denom::Custom(_) => "(custom token)",
-                            Denom::NewCoin => "(new token type)",
-                        },
-                        hex::encode(&output.additional_data)
-                    )?;
-                }
+                send_tx(&mut twriter, stdin, wallet, tx).await?
+            }
+            Args::Stake {
+                wargs,
+                value,
+                start,
+                duration,
+                staker_pubkey,
+            } => {
+                let staker_pubkey = Ed25519PK::from_bytes(
+                    &hex::decode(&staker_pubkey).context("staker pubkey must be hex")?,
+                )
+                .context("staker pubkey must be 32 bytes")?;
+                let wallet = wargs.wallet().await?;
+                let last_header = wargs
+                    .common
+                    .dclient()
+                    .get_summary(wallet.summary().await?.network == NetID::Testnet)
+                    .await?;
+                let next_epoch = last_header.height / STAKE_EPOCH + 1;
+                let start_epoch = start.unwrap_or_default().max(next_epoch);
+                let duration = duration.unwrap_or(1);
+                let end_epoch = start_epoch + duration;
+                let post_end_epoch = start_epoch + duration + 1;
+                const BLOCKS_IN_DAY: u64 = 2880;
                 writeln!(
                     twriter,
-                    "{}\t{} µMEL",
-                    " (network fees)".yellow(),
-                    tx.fee.to_string()
+                    "Latest:\tblock {} (epoch {})",
+                    (last_header.height).to_string().bold(),
+                    last_header.height / STAKE_EPOCH
                 )?;
-                twriter.flush()?;
-                proceed_prompt(&mut stdin).await?;
-                let txhash = wallet.send_tx(tx).await?;
-                write_txhash(&mut twriter, &wargs.wallet, txhash)?;
+                writeln!(
+                    twriter,
+                    "Voting rights start:\tblock {} (epoch {}, in {} days)",
+                    (start_epoch * STAKE_EPOCH).to_string().bold().bright_blue(),
+                    start_epoch,
+                    (start_epoch * STAKE_EPOCH - last_header.height) / BLOCKS_IN_DAY
+                )?;
+                writeln!(
+                    twriter,
+                    "Voting rights end:\tblock {} (epoch {}, in {} days)",
+                    (end_epoch * STAKE_EPOCH).to_string().bold().bright_yellow(),
+                    end_epoch,
+                    (end_epoch * STAKE_EPOCH - last_header.height) / BLOCKS_IN_DAY
+                )?;
+                writeln!(
+                    twriter,
+                    "Syms unlock:\tblock {} (epoch {}, in {} days)",
+                    (post_end_epoch * STAKE_EPOCH)
+                        .to_string()
+                        .bold()
+                        .bright_green(),
+                    post_end_epoch,
+                    (post_end_epoch * STAKE_EPOCH - last_header.height) / BLOCKS_IN_DAY
+                )?;
+                writeln!(
+                    twriter,
+                    "{}",
+                    "WARNING: Syms are immediately locked no matter when voting rights start!"
+                        .bright_red()
+                        .bold()
+                        .italic()
+                )?;
+                let tx = wallet
+                    .prepare_stake_transaction(StakeDoc {
+                        e_start: start_epoch,
+                        e_post_end: post_end_epoch,
+                        syms_staked: value,
+                        pubkey: staker_pubkey,
+                    })
+                    .await?;
+                send_tx(&mut twriter, stdin, wallet, tx).await?
             }
             Args::WaitConfirmation { wargs, txhash } => {
                 wait_tx(&wargs.wallet().await?, TxHash(txhash)).await?
@@ -415,6 +477,43 @@ fn main() -> http_types::Result<()> {
     })
 }
 
+async fn send_tx(
+    mut twriter: impl Write,
+    mut stdin: impl AsyncRead + Unpin,
+    wallet: WalletClient,
+    tx: Transaction,
+) -> anyhow::Result<()> {
+    writeln!(twriter, "{}", "TRANSACTION RECIPIENTS".bold())?;
+    writeln!(twriter, "{}", "Address\tAmount\tAdditional data".italic())?;
+    for output in tx.outputs.iter() {
+        writeln!(
+            twriter,
+            "{}\t{} {}\t{:?}",
+            output.covhash.to_string().bright_blue(),
+            output.value,
+            match output.denom {
+                Denom::Mel => "µMEL",
+                Denom::Sym => "µSYM",
+                Denom::NomDosc => "µnomDOSC",
+                Denom::Custom(_) => "(custom token)",
+                Denom::NewCoin => "(new token type)",
+            },
+            hex::encode(&output.additional_data)
+        )?;
+    }
+    writeln!(
+        twriter,
+        "{}\t{} µMEL",
+        " (network fees)".yellow(),
+        tx.fee.to_string()
+    )?;
+    twriter.flush()?;
+    proceed_prompt(&mut stdin).await?;
+    let txhash = wallet.send_tx(tx).await?;
+    write_txhash(&mut twriter, wallet.name(), txhash)?;
+    Ok(())
+}
+
 fn write_wallet_summary(
     out: &mut impl Write,
     wallet_name: &str,
@@ -457,6 +556,11 @@ fn write_wallet_summary(
         };
         writeln!(out, "\t{}\t{}", v, denom)?;
     }
+    writeln!(
+        out,
+        "Staked:\t{}",
+        format!("{}\tµSYM", summary.staked_microsym)
+    )?;
     Ok(())
 }
 

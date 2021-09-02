@@ -7,7 +7,8 @@ use std::{
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
 use themelio_stf::{
-    CoinData, CoinID, Denom, HexBytes, PoolKey, PoolState, Transaction, TxHash, TxKind,
+    CoinData, CoinID, Denom, Header, HexBytes, PoolKey, PoolState, StakeDoc, Transaction, TxHash,
+    TxKind,
 };
 use tmelcrypt::Ed25519SK;
 
@@ -103,6 +104,20 @@ impl DaemonClient {
         .body_json()
         .await?)
     }
+
+    /// Obtains the latest header
+    pub async fn get_summary(&self, testnet: bool) -> Result<Header, DaemonError> {
+        Ok(successful(
+            http_get(
+                self.endpoint,
+                &format!("summary?{}", if testnet { "testnet=1" } else { "" }),
+            )
+            .await?,
+        )
+        .await?
+        .body_json()
+        .await?)
+    }
 }
 
 /// An interface to a particular wallet.
@@ -189,6 +204,25 @@ impl WalletClient {
         Ok(TxHash(
             hash_string.parse().map_err(http_types::Error::from)?,
         ))
+    }
+
+    /// Obtain a prepared staking transaction
+    pub async fn prepare_stake_transaction(
+        &self,
+        stake_doc: StakeDoc,
+    ) -> Result<Transaction, DaemonError> {
+        Ok(successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/prepare-stake-tx", self.wallet_name),
+                Method::Post,
+                serde_json::to_vec(&stake_doc).unwrap(),
+            )
+            .await?,
+        )
+        .await?
+        .body_json()
+        .await?)
     }
 
     /// Obtain a prepared transaction
@@ -295,6 +329,11 @@ impl WalletClient {
         .await?
         .body_json()
         .await?)
+    }
+
+    /// Gets the name
+    pub fn name(&self) -> &str {
+        &self.wallet_name
     }
 }
 
