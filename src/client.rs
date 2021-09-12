@@ -7,10 +7,9 @@ use std::{
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
 use themelio_stf::{
-    CoinData, CoinID, Denom, Header, HexBytes, PoolKey, PoolState, StakeDoc, Transaction, TxHash,
-    TxKind,
+    melvm::Covenant, CoinData, CoinID, Denom, Header, HexBytes, PoolKey, PoolState, StakeDoc,
+    Transaction, TxHash, TxKind,
 };
-use tmelcrypt::Ed25519SK;
 
 use crate::{structs::WalletSummary, DaemonError, TransactionStatus, WalletDump};
 
@@ -225,13 +224,28 @@ impl WalletClient {
         .await?)
     }
 
+    /// Force-reverts a tx
+    pub async fn force_revert_transaction(&self, txhash: TxHash) -> Result<(), DaemonError> {
+        successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/transactions/{}", self.wallet_name, txhash),
+                Method::Delete,
+                "".to_string(),
+            )
+            .await?,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Obtain a prepared transaction
     pub async fn prepare_transaction(
         &self,
         kind: TxKind,
         desired_inputs: Vec<CoinID>,
         desired_outputs: Vec<CoinData>,
-        secret: Option<Ed25519SK>,
+        scripts: Vec<Covenant>,
         data: Vec<u8>,
         no_balance: Vec<Denom>,
     ) -> Result<Transaction, DaemonError> {
@@ -253,12 +267,10 @@ impl WalletClient {
             "nobalance".to_string(),
             serde_json::to_value(&no_balance).unwrap(),
         );
-        if let Some(secret) = secret {
-            adhoc.insert(
-                "signing_key".to_string(),
-                serde_json::to_value(hex::encode(&secret.0)).unwrap(),
-            );
-        }
+        adhoc.insert(
+            "scripts".to_string(),
+            serde_json::to_value(scripts).unwrap(),
+        );
         Ok(successful(
             http_with_body(
                 self.endpoint,

@@ -3,15 +3,15 @@ use autoswap::do_autoswap;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 use smol::{prelude::*, process::Child};
-use std::{convert::TryInto, io::Write, time::Duration};
+use std::{io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
 use tabwriter::TabWriter;
 use themelio_stf::{
-    melvm::Address, CoinData, CoinID, Denom, NetID, PoolKey, StakeDoc, Transaction, TxHash, TxKind,
-    STAKE_EPOCH,
+    melvm::{Address, Covenant},
+    CoinData, CoinID, Denom, NetID, PoolKey, StakeDoc, Transaction, TxHash, TxKind, STAKE_EPOCH,
 };
-use tmelcrypt::{Ed25519PK, Ed25519SK, HashVal};
+use tmelcrypt::{Ed25519PK, HashVal};
 mod autoswap;
 
 #[derive(StructOpt, Clone, Debug)]
@@ -86,9 +86,19 @@ enum Args {
         #[structopt(long)]
         /// A string specifying who to send money to, in the format "dest,amount[,denom[,additional_data]]". For example, --to $ADDRESS,1 sends 1 µMEL to $ADDRESS. Can be specified multiple times to send money to multiple addresses.
         to: Vec<CoinDataWrapper>,
+        /// Force the selection of a coin
         #[structopt(long)]
-        /// Hexadecimal secret key. Optional if the wallet is unlocked.
-        secret: Option<String>,
+        force_spend: Vec<CoinID>,
+        /// Additional covenants. This often must be specified if we are spending coins that belong to other addresses, like covenant coins.
+        #[structopt(long)]
+        add_covenant: Vec<String>,
+    },
+    /// Force-reverts a transaction. DO NOT use unless you're sure the transaction is not on the blockchain and will not be!
+    ForceRevert {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+        /// Transaction hash
+        txhash: HashVal,
     },
     /// Unlocks a wallet. Will read password from stdin.
     Unlock {
@@ -274,22 +284,32 @@ fn main() -> http_types::Result<()> {
                 let summary = wargs.wallet().await?.summary().await?;
                 write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
             }
-            Args::Send { wargs, to, secret } => {
+            Args::Send {
+                wargs,
+                to,
+                force_spend,
+                add_covenant,
+            } => {
                 let wallet = wargs.wallet().await?;
-                let secret = secret
-                    .map(|secret| Ed25519SK(hex::decode(&secret).unwrap().try_into().unwrap()));
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
                 let tx = wallet
                     .prepare_transaction(
                         TxKind::Normal,
-                        vec![],
-                        desired_outputs.clone(),
-                        secret,
+                        force_spend,
+                        desired_outputs,
+                        add_covenant
+                            .into_iter()
+                            .map(|s| Ok(Covenant(hex::decode(&s)?)))
+                            .collect::<anyhow::Result<Vec<_>>>()?,
                         vec![],
                         vec![],
                     )
                     .await?;
                 send_tx(&mut twriter, stdin, wallet, tx).await?
+            }
+            Args::ForceRevert { wargs, txhash } => {
+                let wallet = wargs.wallet().await?;
+                wallet.force_revert_transaction(txhash.into()).await?;
             }
             Args::Stake {
                 wargs,
@@ -435,7 +455,7 @@ fn main() -> http_types::Result<()> {
                             additional_data: vec![],
                             covhash: wallet.summary().await?.address,
                         }],
-                        None,
+                        vec![],
                         pool_key.to_bytes(),
                         vec![],
                     )

@@ -89,7 +89,7 @@ async fn prepare_swap(
                 additional_data: vec![],
                 covhash: wallet.summary().await?.address,
             }],
-            None,
+            vec![],
             PoolKey::new(from, to).to_bytes(),
             vec![],
         )
