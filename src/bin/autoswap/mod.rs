@@ -65,7 +65,13 @@ async fn execute_swap(
     from: Denom,
     to: Denom,
 ) -> http_types::Result<()> {
-    let max_from_value = wallet.summary().await?.detailed_balance[&hex::encode(&from.to_bytes())];
+    let summary = wallet.summary().await?;
+    let max_from_value = summary.detailed_balance[&hex::encode(&from.to_bytes())];
+    let max_from_value = if from == Denom::Sym {
+        max_from_value - summary.staked_microsym
+    } else {
+        max_from_value
+    };
     let ms_swap = prepare_swap(wallet, from_value.unwrap_or(max_from_value), from, to).await?;
     let txhash = wallet.send_tx(ms_swap).await?;
     wait_tx(wallet, txhash).await?;
