@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient};
-use themelio_stf::{CoinData, Denom, NetID, PoolKey, Transaction, TxKind};
+use themelio_stf::{CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxKind};
 
 use crate::wait_tx;
 
 /// Execute arbitrage
-pub async fn do_autoswap(daemon: DaemonClient, wallet: WalletClient, value: u128) {
+pub async fn do_autoswap(daemon: DaemonClient, wallet: WalletClient, value: CoinValue) {
     loop {
         if let Err(err) = do_autoswap_once(&daemon, &wallet, value).await {
             eprintln!("cannot autoswap: {}", err.to_string().red())
@@ -18,7 +18,7 @@ pub async fn do_autoswap(daemon: DaemonClient, wallet: WalletClient, value: u128
 async fn do_autoswap_once(
     daemon: &DaemonClient,
     wallet: &WalletClient,
-    value: u128,
+    value: CoinValue,
 ) -> http_types::Result<()> {
     // first, we get the relevant pool states
     let is_testnet = wallet.summary().await?.network == NetID::Testnet;
@@ -33,21 +33,21 @@ async fn do_autoswap_once(
         .await?;
     // either m->s->d->m or m->d->s->m. these are the only two paths
     let msdm_payoff = {
-        let syms = ms_state.clone().swap_many(value, 0).1;
+        let syms = ms_state.clone().swap_many(value.0, 0).1;
         let doscs = ds_state.clone().swap_many(0, syms).0;
         dm_state.clone().swap_many(doscs, 0).1
     };
     let mdsm_payoff = {
-        let doscs = dm_state.clone().swap_many(0, value).0;
+        let doscs = dm_state.clone().swap_many(0, value.0).0;
         let syms = ds_state.clone().swap_many(doscs, 0).1;
         ms_state.clone().swap_many(0, syms).0
     };
-    if msdm_payoff > value {
+    if msdm_payoff > value.0 {
         eprintln!("MSDM: {} => {} µMEL", value, msdm_payoff);
         execute_swap(wallet, Some(value), Denom::Mel, Denom::Sym).await?;
         execute_swap(wallet, None, Denom::Sym, Denom::NomDosc).await?;
         execute_swap(wallet, None, Denom::NomDosc, Denom::Mel).await?;
-    } else if mdsm_payoff > value {
+    } else if mdsm_payoff > value.0 {
         eprintln!("MDSM: {} => {} µMEL", value, mdsm_payoff);
         execute_swap(wallet, Some(value), Denom::Mel, Denom::NomDosc).await?;
         execute_swap(wallet, None, Denom::NomDosc, Denom::Sym).await?;
@@ -61,7 +61,7 @@ async fn do_autoswap_once(
 
 async fn execute_swap(
     wallet: &WalletClient,
-    from_value: Option<u128>,
+    from_value: Option<CoinValue>,
     from: Denom,
     to: Denom,
 ) -> http_types::Result<()> {
@@ -75,7 +75,7 @@ async fn execute_swap(
 
 async fn prepare_swap(
     wallet: &WalletClient,
-    from_value: u128,
+    from_value: CoinValue,
     from: Denom,
     to: Denom,
 ) -> http_types::Result<Transaction> {

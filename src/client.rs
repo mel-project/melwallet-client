@@ -33,7 +33,7 @@ impl DaemonClient {
             .await?)
     }
 
-    /// Create a wallet
+    /// Create a walletz`   
     pub async fn dump_wallet(&self, name: &str) -> Result<Option<WalletDump>, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", name)).await?;
         if resp.status() == StatusCode::NotFound {

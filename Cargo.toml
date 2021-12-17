@@ -11,27 +11,27 @@ repository = "https://github.com/themeliolabs/melwallet-client"
 
 [dependencies]
 # tmelcrypt = { git = "https://github.com/themeliolabs/themelio-core" }
-tmelcrypt= "0.1.0"
-smolscale= "0.3.12"
-stdcode= "0.1.2"
-themelio-stf= "0.5.5"
-serde={ version = "1.0.130", features = ["derive"] }
-anyhow= "1.0.43"
-tracing-subscriber = "0.2.20"
+tmelcrypt= "0.2.3"
+smolscale= "0.3.16"
+stdcode= "0.1.4"
+themelio-stf= "0.6.13"
+serde={ version = "1.0.132", features = ["derive"] }
+anyhow= "1.0.51"
+tracing-subscriber = "0.3.3"
 log= "0.4.14"
-tracing= "0.1.26"
+tracing= "0.1.29"
 smol= "1.2.5"
-serde_json= { version = "1.0.67", features = ["arbitrary_precision"] }
-structopt= "0.3.23"
-async-h1= "2.3.2"
-dirs= "3.0.2"
+serde_json= { version = "1.0.73", features = ["arbitrary_precision"] }
+structopt= "0.3.25"
+async-h1= "2.3.3"
+dirs= "4.0.0"
 http-types= "2.12.0"
 smol-timeout= "0.6.0"
-serde_with= "1.9.4"
+serde_with= "1.11.0"
 colored= "2.0.0"
 tabwriter={ version = "1.2.1", features = ["ansi_formatting"] }
 hex= "0.4.3"
-once_cell = "1.8.0"
+once_cell = "1.9.0"
 getrandom = "0.2.3"
 format_num= "0.1.0"
-thiserror= "1.0.28"
+thiserror= "1.0.30"

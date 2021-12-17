@@ -4,15 +4,15 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use themelio_stf::{
     melvm::{Address, Covenant},
-    CoinData, CoinDataHeight, CoinID, NetID, StakeDoc, Transaction, TxHash,
+    BlockHeight, CoinData, CoinDataHeight, CoinID, CoinValue, NetID, StakeDoc, Transaction, TxHash,
 };
 use tmelcrypt::HashVal;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletSummary {
-    pub total_micromel: u128,
-    pub detailed_balance: BTreeMap<String, u128>,
-    pub staked_microsym: u128,
+    pub total_micromel: CoinValue,
+    pub detailed_balance: BTreeMap<String, CoinValue>,
+    pub staked_microsym: CoinValue,
     pub network: NetID,
     #[serde(with = "stdcode::asstr")]
     pub address: Address,
@@ -34,7 +34,7 @@ pub struct WalletData {
     #[serde_as(as = "Vec<(_, _)>")]
     spent_coins: BTreeMap<CoinID, CoinDataHeight>,
     tx_in_progress: BTreeMap<HashVal, Transaction>,
-    tx_confirmed: BTreeMap<HashVal, (Transaction, u64)>,
+    tx_confirmed: BTreeMap<HashVal, (Transaction, BlockHeight)>,
     my_covenant: Covenant,
     #[serde(default)]
     stake_list: BTreeMap<TxHash, StakeDoc>,

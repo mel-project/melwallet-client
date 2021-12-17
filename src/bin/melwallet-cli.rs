@@ -136,7 +136,7 @@ impl FromStr for CoinDataWrapper {
                 let amount: u128 = amount.parse()?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
-                    value: amount,
+                    value: amount.into(),
                     denom: Denom::Mel,
                     additional_data: vec![],
                 }))
@@ -146,7 +146,7 @@ impl FromStr for CoinDataWrapper {
                 let amount: u128 = amount.parse()?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
-                    value: amount,
+                    value: amount.into(),
                     denom: denom.parse()?,
                     additional_data: vec![],
                 }))
@@ -157,7 +157,7 @@ impl FromStr for CoinDataWrapper {
                 let additional_data: Vec<u8> = hex::decode(&additional_data)?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
-                    value: amount,
+                    value: amount.into(),
                     denom: denom.parse()?,
                     additional_data,
                 }))
@@ -328,7 +328,7 @@ fn main() -> http_types::Result<()> {
                     .dclient()
                     .get_summary(wallet.summary().await?.network == NetID::Testnet)
                     .await?;
-                let next_epoch = last_header.height / STAKE_EPOCH + 1;
+                let next_epoch = last_header.height.epoch() + 1;
                 let start_epoch = start.unwrap_or_default().max(next_epoch);
                 let duration = duration.unwrap_or(1);
                 let end_epoch = start_epoch + duration;
@@ -345,14 +345,14 @@ fn main() -> http_types::Result<()> {
                     "Voting rights start:\tblock {} (epoch {}, in {} days)",
                     (start_epoch * STAKE_EPOCH).to_string().bold().bright_blue(),
                     start_epoch,
-                    (start_epoch * STAKE_EPOCH - last_header.height) / BLOCKS_IN_DAY
+                    (start_epoch * STAKE_EPOCH - last_header.height.0) / BLOCKS_IN_DAY
                 )?;
                 writeln!(
                     twriter,
                     "Voting rights end:\tblock {} (epoch {}, in {} days)",
                     (end_epoch * STAKE_EPOCH).to_string().bold().bright_yellow(),
                     end_epoch,
-                    (end_epoch * STAKE_EPOCH - last_header.height) / BLOCKS_IN_DAY
+                    (end_epoch * STAKE_EPOCH - last_header.height.0) / BLOCKS_IN_DAY
                 )?;
                 writeln!(
                     twriter,
@@ -362,7 +362,7 @@ fn main() -> http_types::Result<()> {
                         .bold()
                         .bright_green(),
                     post_end_epoch,
-                    (post_end_epoch * STAKE_EPOCH - last_header.height) / BLOCKS_IN_DAY
+                    (post_end_epoch * STAKE_EPOCH - last_header.height.0) / BLOCKS_IN_DAY
                 )?;
                 writeln!(
                     twriter,
@@ -376,7 +376,7 @@ fn main() -> http_types::Result<()> {
                     .prepare_stake_transaction(StakeDoc {
                         e_start: start_epoch,
                         e_post_end: post_end_epoch,
-                        syms_staked: value,
+                        syms_staked: value.into(),
                         pubkey: staker_pubkey,
                     })
                     .await?;
@@ -426,7 +426,7 @@ fn main() -> http_types::Result<()> {
             Args::Autoswap { wargs, value } => {
                 let daemon = wargs.common.dclient();
                 let wallet = wargs.wallet().await?;
-                do_autoswap(daemon, wallet, value).await;
+                do_autoswap(daemon, wallet, value.into()).await;
             }
             Args::Swap {
                 wargs,
@@ -443,14 +443,14 @@ fn main() -> http_types::Result<()> {
                 } else {
                     max_value
                 };
-                let value = value.unwrap_or(max_value);
+                let value = value.unwrap_or(max_value.into());
                 let pool_key = PoolKey::new(from, to);
                 let to_send = wallet
                     .prepare_transaction(
                         TxKind::Swap,
                         vec![],
                         vec![CoinData {
-                            value,
+                            value: value.into(),
                             denom: from,
                             additional_data: vec![],
                             covhash: wallet.summary().await?.address,
@@ -555,6 +555,13 @@ fn write_wallet_summary(
         match summary.network {
             NetID::Mainnet => "mainnet".bright_green().bold(),
             NetID::Testnet => "testnet".yellow().bold(),
+            NetID::Custom02 => todo!(),
+            NetID::Custom03 => todo!(),
+            NetID::Custom04 => todo!(),
+            NetID::Custom05 => todo!(),
+            NetID::Custom06 => todo!(),
+            NetID::Custom07 => todo!(),
+            NetID::Custom08 => todo!(),
         }
     )?;
     writeln!(
