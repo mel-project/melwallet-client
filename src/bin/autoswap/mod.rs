@@ -43,12 +43,12 @@ async fn do_autoswap_once(
         ms_state.clone().swap_many(0, syms).0
     };
     if msdm_payoff > value.0 {
-        eprintln!("MSDM: {} => {} µMEL", value, msdm_payoff);
+        eprintln!("MSDM: {} => {} MEL", value, CoinValue(msdm_payoff));
         execute_swap(wallet, Some(value), Denom::Mel, Denom::Sym).await?;
         execute_swap(wallet, None, Denom::Sym, Denom::NomDosc).await?;
         execute_swap(wallet, None, Denom::NomDosc, Denom::Mel).await?;
     } else if mdsm_payoff > value.0 {
-        eprintln!("MDSM: {} => {} µMEL", value, mdsm_payoff);
+        eprintln!("MDSM: {} => {} MEL", value, CoinValue(mdsm_payoff));
         execute_swap(wallet, Some(value), Denom::Mel, Denom::NomDosc).await?;
         execute_swap(wallet, None, Denom::NomDosc, Denom::Sym).await?;
         execute_swap(wallet, None, Denom::Sym, Denom::Mel).await?;
