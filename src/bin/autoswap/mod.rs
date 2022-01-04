@@ -1,10 +1,10 @@
 use std::time::Duration;
 
+use crate::wait_tx;
+use anyhow::Context;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient};
 use themelio_stf::{CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxKind};
-
-use crate::wait_tx;
 
 /// Execute arbitrage
 pub async fn do_autoswap(daemon: DaemonClient, wallet: WalletClient, value: CoinValue) {
@@ -72,7 +72,9 @@ async fn execute_swap(
     } else {
         max_from_value
     };
-    let ms_swap = prepare_swap(wallet, from_value.unwrap_or(max_from_value), from, to).await?;
+    let from_value = from_value.unwrap_or(max_from_value);
+    eprintln!("(swapping {} {:?} => {:?})", from_value, from, to);
+    let ms_swap = prepare_swap(wallet, from_value, from, to).await?;
     let txhash = wallet.send_tx(ms_swap).await?;
     wait_tx(wallet, txhash).await?;
     smol::Timer::after(Duration::from_secs(1)).await;

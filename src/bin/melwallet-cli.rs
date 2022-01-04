@@ -9,7 +9,8 @@ use structopt::StructOpt;
 use tabwriter::TabWriter;
 use themelio_stf::{
     melvm::{Address, Covenant},
-    CoinData, CoinID, Denom, NetID, PoolKey, StakeDoc, Transaction, TxHash, TxKind, STAKE_EPOCH,
+    CoinData, CoinID, CoinValue, Denom, NetID, PoolKey, StakeDoc, Transaction, TxHash, TxKind,
+    STAKE_EPOCH,
 };
 use tmelcrypt::{Ed25519PK, HashVal};
 mod autoswap;
@@ -463,8 +464,8 @@ fn main() -> http_types::Result<()> {
                 writeln!(twriter, "{}", "SWAPPING".bold())?;
                 writeln!(
                     twriter,
-                    "From:\t{} µ{}",
-                    value.to_string().bold().bright_green(),
+                    "From:\t{} {}",
+                    CoinValue(value).to_string().bold().bright_green(),
                     from.to_string()
                 )?;
                 let pool_state = wargs
@@ -479,8 +480,8 @@ fn main() -> http_types::Result<()> {
                 };
                 writeln!(
                     twriter,
-                    "To:\t{} µ{} (approximate)",
-                    to_value.to_string().bold().yellow(),
+                    "To:\t{} {} (approximate)",
+                    CoinValue(to_value).to_string().bold().yellow(),
                     to.to_string()
                 )?;
                 twriter.flush()?;
@@ -512,9 +513,9 @@ async fn send_tx(
             output.covhash.to_string().bright_blue(),
             output.value,
             match output.denom {
-                Denom::Mel => "µMEL",
-                Denom::Sym => "µSYM",
-                Denom::NomDosc => "µnomDOSC",
+                Denom::Mel => "MEL",
+                Denom::Sym => "SYM",
+                Denom::NomDosc => "ERG",
                 Denom::Custom(_) => "(custom token)",
                 Denom::NewCoin => "(new token type)",
             },
@@ -523,7 +524,7 @@ async fn send_tx(
     }
     writeln!(
         twriter,
-        "{}\t{} µMEL",
+        "{}\t{} MEL",
         " (network fees)".yellow(),
         tx.fee.to_string()
     )?;
@@ -572,13 +573,13 @@ fn write_wallet_summary(
     writeln!(
         out,
         "Balance:\t{}",
-        format!("{}\tµMEL", summary.total_micromel)
+        format!("{}\tMEL", summary.total_micromel)
     )?;
     for (k, v) in summary.detailed_balance.iter() {
         let denom = match k.as_str() {
             "6d" => continue,
-            "73" => "µSYM",
-            "64" => "µnomDOSC",
+            "73" => "SYM",
+            "64" => "ERG",
             v => v,
         };
         writeln!(out, "\t{}\t{}", v, denom)?;
@@ -586,7 +587,7 @@ fn write_wallet_summary(
     writeln!(
         out,
         "Staked:\t{}",
-        format!("{}\tµSYM", summary.staked_microsym)
+        format!("{}\tSYM", summary.staked_microsym)
     )?;
     Ok(())
 }
