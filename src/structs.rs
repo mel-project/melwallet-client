@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use themelio_stf::{
-    melvm::{Address, Covenant},
-    BlockHeight, CoinData, CoinDataHeight, CoinID, CoinValue, NetID, StakeDoc, Transaction, TxHash,
+use themelio_stf::melvm::Covenant;
+use themelio_structs::{
+    Address, BlockHeight, CoinData, CoinDataHeight, CoinID, CoinValue, NetID, StakeDoc,
+    Transaction, TxHash,
 };
 use tmelcrypt::HashVal;
 

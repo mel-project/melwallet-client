@@ -7,9 +7,9 @@ use std::{io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use structopt::StructOpt;
 use tabwriter::TabWriter;
-use themelio_stf::{
-    melvm::{Address, Covenant},
-    CoinData, CoinID, CoinValue, Denom, NetID, PoolKey, StakeDoc, Transaction, TxHash, TxKind,
+use themelio_stf::{melvm::Covenant, PoolKey};
+use themelio_structs::{
+    Address, CoinData, CoinID, CoinValue, Denom, NetID, StakeDoc, Transaction, TxHash, TxKind,
     STAKE_EPOCH,
 };
 use tmelcrypt::{Ed25519PK, HashVal};
@@ -108,6 +108,11 @@ enum Args {
     },
     /// Locks a wallet down again.
     Lock {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+    },
+    /// Checks a wallet to make sure it's up to day.
+    Check {
         #[structopt(flatten)]
         wargs: WalletArgs,
     },
@@ -444,7 +449,7 @@ fn main() -> http_types::Result<()> {
                 } else {
                     max_value
                 };
-                let value = value.unwrap_or(max_value.into());
+                let value = value.unwrap_or_else(|| max_value.into());
                 let pool_key = PoolKey::new(from, to);
                 let to_send = wallet
                     .prepare_transaction(
@@ -466,7 +471,7 @@ fn main() -> http_types::Result<()> {
                     twriter,
                     "From:\t{} {}",
                     CoinValue(value).to_string().bold().bright_green(),
-                    from.to_string()
+                    from
                 )?;
                 let pool_state = wargs
                     .common
@@ -482,7 +487,7 @@ fn main() -> http_types::Result<()> {
                     twriter,
                     "To:\t{} {} (approximate)",
                     CoinValue(to_value).to_string().bold().yellow(),
-                    to.to_string()
+                    to
                 )?;
                 twriter.flush()?;
                 proceed_prompt(&mut stdin).await?;
@@ -491,6 +496,10 @@ fn main() -> http_types::Result<()> {
                 if wait {
                     wait_tx(&wallet, txhash).await?
                 }
+            }
+            Args::Check { wargs } => {
+                let wallet = wargs.wallet().await?;
+                wallet.check().await?;
             }
         }
         twriter.flush()?;
@@ -515,19 +524,14 @@ async fn send_tx(
             match output.denom {
                 Denom::Mel => "MEL",
                 Denom::Sym => "SYM",
-                Denom::NomDosc => "ERG",
+                Denom::Erg => "ERG",
                 Denom::Custom(_) => "(custom token)",
                 Denom::NewCoin => "(new token type)",
             },
             hex::encode(&output.additional_data)
         )?;
     }
-    writeln!(
-        twriter,
-        "{}\t{} MEL",
-        " (network fees)".yellow(),
-        tx.fee.to_string()
-    )?;
+    writeln!(twriter, "{}\t{} MEL", " (network fees)".yellow(), tx.fee)?;
     twriter.flush()?;
     proceed_prompt(&mut stdin).await?;
     let txhash = wallet.send_tx(tx).await?;

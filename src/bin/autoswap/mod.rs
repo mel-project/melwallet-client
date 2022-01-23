@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use crate::wait_tx;
-use anyhow::Context;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient};
-use themelio_stf::{CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxKind};
+use themelio_stf::PoolKey;
+use themelio_structs::{CoinData, CoinValue, Denom, NetID, Transaction, TxKind};
 
 /// Execute arbitrage
 pub async fn do_autoswap(daemon: DaemonClient, wallet: WalletClient, value: CoinValue) {
@@ -26,10 +26,10 @@ async fn do_autoswap_once(
         .get_pool(PoolKey::new(Denom::Mel, Denom::Sym), is_testnet)
         .await?;
     let dm_state = daemon
-        .get_pool(PoolKey::new(Denom::Mel, Denom::NomDosc), is_testnet)
+        .get_pool(PoolKey::new(Denom::Mel, Denom::Erg), is_testnet)
         .await?;
     let ds_state = daemon
-        .get_pool(PoolKey::new(Denom::Sym, Denom::NomDosc), is_testnet)
+        .get_pool(PoolKey::new(Denom::Sym, Denom::Erg), is_testnet)
         .await?;
     // either m->s->d->m or m->d->s->m. these are the only two paths
     let msdm_payoff = {
@@ -45,12 +45,12 @@ async fn do_autoswap_once(
     if msdm_payoff > value.0 {
         eprintln!("MSDM: {} => {} MEL", value, CoinValue(msdm_payoff));
         execute_swap(wallet, Some(value), Denom::Mel, Denom::Sym).await?;
-        execute_swap(wallet, None, Denom::Sym, Denom::NomDosc).await?;
-        execute_swap(wallet, None, Denom::NomDosc, Denom::Mel).await?;
+        execute_swap(wallet, None, Denom::Sym, Denom::Erg).await?;
+        execute_swap(wallet, None, Denom::Erg, Denom::Mel).await?;
     } else if mdsm_payoff > value.0 {
         eprintln!("MDSM: {} => {} MEL", value, CoinValue(mdsm_payoff));
-        execute_swap(wallet, Some(value), Denom::Mel, Denom::NomDosc).await?;
-        execute_swap(wallet, None, Denom::NomDosc, Denom::Sym).await?;
+        execute_swap(wallet, Some(value), Denom::Mel, Denom::Erg).await?;
+        execute_swap(wallet, None, Denom::Erg, Denom::Sym).await?;
         execute_swap(wallet, None, Denom::Sym, Denom::Mel).await?;
     } else {
         eprintln!("No arbitrage opportunities!");

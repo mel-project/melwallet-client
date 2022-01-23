@@ -6,9 +6,9 @@ use std::{
 
 use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
-use themelio_stf::{
-    melvm::Covenant, CoinData, CoinID, Denom, Header, HexBytes, PoolKey, PoolState, StakeDoc,
-    Transaction, TxHash, TxKind,
+use themelio_stf::{melvm::Covenant, HexBytes, PoolKey};
+use themelio_structs::{
+    CoinData, CoinID, Denom, Header, PoolState, StakeDoc, Transaction, TxHash, TxKind,
 };
 
 use crate::{structs::WalletSummary, DaemonError, TransactionStatus, WalletDump};
@@ -245,7 +245,7 @@ impl WalletClient {
         kind: TxKind,
         desired_inputs: Vec<CoinID>,
         desired_outputs: Vec<CoinData>,
-        scripts: Vec<Covenant>,
+        covenants: Vec<Covenant>,
         data: Vec<u8>,
         no_balance: Vec<Denom>,
     ) -> Result<Transaction, DaemonError> {
@@ -268,8 +268,8 @@ impl WalletClient {
             serde_json::to_value(&no_balance).unwrap(),
         );
         adhoc.insert(
-            "scripts".to_string(),
-            serde_json::to_value(scripts).unwrap(),
+            "covenants".to_string(),
+            serde_json::to_value(covenants).unwrap(),
         );
         Ok(successful(
             http_with_body(
@@ -343,6 +343,19 @@ impl WalletClient {
         .await?)
     }
 
+    /// Self-checks the wallet.
+    pub async fn check(&self) -> http_types::Result<()> {
+        successful(
+            http_put(
+                self.endpoint,
+                &format!("wallets/{}/check", self.wallet_name),
+            )
+            .await?,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Gets the name
     pub fn name(&self) -> &str {
         &self.wallet_name
@@ -356,6 +369,18 @@ async fn http_get(endpoint: SocketAddr, path: &str) -> http_types::Result<Respon
     let conn = TcpStream::connect(endpoint).await?;
     let mut req = Request::new(
         Method::Get,
+        Url::parse(&format!("http://{}/{}", endpoint, path))?,
+    );
+    if let Some(token) = AUTH_TOKEN.as_ref() {
+        req.insert_header("X-Melwalletd-Auth-Token", token);
+    }
+    Ok(async_h1::connect(conn, req).await?)
+}
+
+async fn http_put(endpoint: SocketAddr, path: &str) -> http_types::Result<Response> {
+    let conn = TcpStream::connect(endpoint).await?;
+    let mut req = Request::new(
+        Method::Put,
         Url::parse(&format!("http://{}/{}", endpoint, path))?,
     );
     if let Some(token) = AUTH_TOKEN.as_ref() {
