@@ -43,12 +43,12 @@ async fn do_autoswap_once(
         ms_state.clone().swap_many(0, syms).0
     };
     if msdm_payoff > value.0 {
-        eprintln!("MSDM: {} => {} MEL", value, CoinValue(msdm_payoff));
+        eprintln!("MSEM: {} => {} MEL", value, CoinValue(msdm_payoff));
         execute_swap(wallet, Some(value), Denom::Mel, Denom::Sym).await?;
         execute_swap(wallet, None, Denom::Sym, Denom::Erg).await?;
         execute_swap(wallet, None, Denom::Erg, Denom::Mel).await?;
     } else if mdsm_payoff > value.0 {
-        eprintln!("MDSM: {} => {} MEL", value, CoinValue(mdsm_payoff));
+        eprintln!("MESM: {} => {} MEL", value, CoinValue(mdsm_payoff));
         execute_swap(wallet, Some(value), Denom::Mel, Denom::Erg).await?;
         execute_swap(wallet, None, Denom::Erg, Denom::Sym).await?;
         execute_swap(wallet, None, Denom::Sym, Denom::Mel).await?;
@@ -73,7 +73,7 @@ async fn execute_swap(
         max_from_value
     };
     let from_value = from_value.unwrap_or(max_from_value);
-    eprintln!("(swapping {} {:?} => {:?})", from_value, from, to);
+    eprintln!("(swapping {} {} => {})", from_value, from, to);
     let ms_swap = prepare_swap(wallet, from_value, from, to).await?;
     let txhash = wallet.send_tx(ms_swap).await?;
     wait_tx(wallet, txhash).await?;
