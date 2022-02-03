@@ -111,8 +111,8 @@ enum Args {
         #[structopt(flatten)]
         wargs: WalletArgs,
     },
-    /// Checks a wallet to make sure it's up to day.
-    Check {
+    /// Synchronizes a wallet to make sure it's up to date.
+    Sync {
         #[structopt(flatten)]
         wargs: WalletArgs,
     },
@@ -497,9 +497,36 @@ fn main() -> http_types::Result<()> {
                     wait_tx(&wallet, txhash).await?
                 }
             }
-            Args::Check { wargs } => {
+            Args::Sync { wargs } => {
                 let wallet = wargs.wallet().await?;
+                let pre_check = wallet.summary().await?;
                 wallet.check().await?;
+                let post_check = wallet.summary().await?;
+                for (denom, balance) in post_check.detailed_balance {
+                    let pre_balance = pre_check
+                        .detailed_balance
+                        .get(&denom)
+                        .cloned()
+                        .unwrap_or_default();
+                    if balance != pre_balance {
+                        writeln!(
+                            twriter,
+                            "{} {}=>{} {}",
+                            "updated".yellow().bold(),
+                            pre_balance,
+                            balance,
+                            denom
+                        )?;
+                    } else {
+                        writeln!(
+                            twriter,
+                            "{} {} {}",
+                            "confirmed".green().bold(),
+                            balance,
+                            denom
+                        )?;
+                    }
+                }
             }
         }
         twriter.flush()?;
