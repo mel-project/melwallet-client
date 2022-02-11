@@ -508,6 +508,12 @@ fn main() -> http_types::Result<()> {
                         .get(&denom)
                         .cloned()
                         .unwrap_or_default();
+                    let denom = match denom.as_str() {
+                        "6d" => "MEL",
+                        "73" => "SYM",
+                        "64" => "ERG",
+                        v => v,
+                    };
                     if balance != pre_balance {
                         writeln!(
                             twriter,
