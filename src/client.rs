@@ -33,7 +33,7 @@ impl DaemonClient {
             .await?)
     }
 
-    /// Create a walletz`   
+    /// Dump a wallet.
     pub async fn dump_wallet(&self, name: &str) -> Result<Option<WalletDump>, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", name)).await?;
         if resp.status() == StatusCode::NotFound {
@@ -135,6 +135,15 @@ async fn successful(mut resp: Response) -> Result<Response, DaemonError> {
 }
 
 impl WalletClient {
+    /// Dump a wallet.
+    pub async fn dump_wallet(&self) -> Result<Option<WalletDump>, DaemonError> {
+        let mut resp = http_get(self.endpoint, &format!("wallets/{}", self.wallet_name)).await?;
+        if resp.status() == StatusCode::NotFound {
+            return Ok(None);
+        }
+        Ok(Some(resp.body_json().await?))
+    }
+
     /// Lock a wallet
     pub async fn lock(&self) -> Result<(), DaemonError> {
         successful(
