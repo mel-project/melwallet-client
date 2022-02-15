@@ -136,11 +136,8 @@ async fn successful(mut resp: Response) -> Result<Response, DaemonError> {
 
 impl WalletClient {
     /// Dump a wallet.
-    pub async fn dump_wallet(&self) -> Result<Option<WalletDump>, DaemonError> {
+    pub async fn dump_wallet(&self) -> Result<WalletDump, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", self.wallet_name)).await?;
-        if resp.status() == StatusCode::NotFound {
-            return Ok(None);
-        }
         Ok(Some(resp.body_json().await?))
     }
 
