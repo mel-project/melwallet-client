@@ -138,7 +138,7 @@ impl WalletClient {
     /// Dump a wallet.
     pub async fn dump_wallet(&self) -> Result<WalletDump, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", self.wallet_name)).await?;
-        Ok(Some(resp.body_json().await?))
+        Ok(resp.body_json().await?)
     }
 
     /// Lock a wallet
