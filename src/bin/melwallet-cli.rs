@@ -58,6 +58,19 @@ enum Args {
         #[structopt(long)]
         wait: bool,
     },
+    /// Supplies liquidity to Melswap
+    LiqDeposit {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+        /// Number of the first denomination to deposit (in millionths)
+        a_count: u128,
+        /// First denomination
+        a_denom: Denom,
+        /// Number of the second denomination to deposit (in millionths)
+        b_count: u128,
+        /// Second denomination
+        b_denom: Denom,
+    },
     /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/NOM-DOSC pairs
     Autoswap {
         #[structopt(flatten)]
@@ -534,6 +547,53 @@ fn main() -> http_types::Result<()> {
                     }
                 }
             }
+            Args::LiqDeposit {
+                wargs,
+                a_count,
+                a_denom,
+                b_count,
+                b_denom,
+            } => {
+                let wallet = wargs.wallet().await?;
+                let covhash = wallet.summary().await?.address;
+                let poolkey = PoolKey::new(a_denom, b_denom);
+                let left_denom = poolkey.left;
+                let right_denom = poolkey.right;
+                let left_count = if left_denom == a_denom {
+                    a_count
+                } else {
+                    b_count
+                };
+                let right_count = if right_denom == a_denom {
+                    a_count
+                } else {
+                    b_count
+                };
+                let tx = wallet
+                    .prepare_transaction(
+                        TxKind::LiqDeposit,
+                        vec![],
+                        vec![
+                            CoinData {
+                                value: left_count.into(),
+                                denom: left_denom,
+                                covhash,
+                                additional_data: vec![],
+                            },
+                            CoinData {
+                                value: right_count.into(),
+                                denom: right_denom,
+                                covhash,
+                                additional_data: vec![],
+                            },
+                        ],
+                        vec![],
+                        poolkey.to_bytes(),
+                        vec![],
+                    )
+                    .await?;
+                send_tx(&mut twriter, stdin, wallet, tx).await?;
+            }
         }
         twriter.flush()?;
         Ok(())
@@ -644,9 +704,11 @@ fn write_txhash(out: &mut impl Write, wallet_name: &str, txhash: TxHash) -> anyh
 }
 
 async fn proceed_prompt(stdin: &mut (impl AsyncRead + Unpin)) -> anyhow::Result<()> {
-    eprint!("Proceed? [y/N] ");
+    eprintln!("Proceed? [y/N] ");
     let mut letter = [0u8; 1];
-    stdin.read_exact(&mut letter).await?;
+    while letter[0].is_ascii_whitespace() || letter[0] == 0 {
+        stdin.read_exact(&mut letter).await?;
+    }
     if letter[0] != 0x79 {
         anyhow::bail!("canceled");
     }
