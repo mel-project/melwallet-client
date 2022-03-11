@@ -31,16 +31,16 @@ pub struct WalletDump {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WalletData {
     #[serde_as(as = "Vec<(_, _)>")]
-    unspent_coins: BTreeMap<CoinID, CoinDataHeight>,
+    pub unspent_coins: BTreeMap<CoinID, CoinDataHeight>,
     #[serde_as(as = "Vec<(_, _)>")]
-    spent_coins: BTreeMap<CoinID, CoinDataHeight>,
+    pub spent_coins: BTreeMap<CoinID, CoinDataHeight>,
     #[serde(rename = "tx_in_progress_v2", default)]
-    tx_in_progress: BTreeMap<TxHash, (Transaction, BlockHeight)>,
-    tx_confirmed: BTreeMap<HashVal, (Transaction, BlockHeight)>,
-    my_covenant: Covenant,
+    pub tx_in_progress: BTreeMap<TxHash, (Transaction, BlockHeight)>,
+    pub tx_confirmed: BTreeMap<HashVal, (Transaction, BlockHeight)>,
+    pub my_covenant: Covenant,
     #[serde(default)]
-    stake_list: BTreeMap<TxHash, StakeDoc>,
-    network: NetID,
+    pub stake_list: BTreeMap<TxHash, StakeDoc>,
+    pub network: NetID,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
