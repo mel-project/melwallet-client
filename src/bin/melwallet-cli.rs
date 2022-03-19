@@ -24,12 +24,6 @@ enum Args {
         #[structopt(long)]
         testnet: bool,
     },
-    /// Add a coin to a wallet
-    AddCoin {
-        #[structopt(flatten)]
-        wargs: WalletArgs,
-        coin: CoinID,
-    },
     /// List all available wallets
     List(CommonArgs),
     /// Send a 1000 MEL faucet transaction for a testnet wallet
@@ -107,13 +101,6 @@ enum Args {
         #[structopt(long)]
         add_covenant: Vec<String>,
     },
-    /// Force-reverts a transaction. DO NOT use unless you're sure the transaction is not on the blockchain and will not be!
-    ForceRevert {
-        #[structopt(flatten)]
-        wargs: WalletArgs,
-        /// Transaction hash
-        txhash: HashVal,
-    },
     /// Unlocks a wallet. Will read password from stdin.
     Unlock {
         #[structopt(flatten)]
@@ -121,11 +108,6 @@ enum Args {
     },
     /// Locks a wallet down again.
     Lock {
-        #[structopt(flatten)]
-        wargs: WalletArgs,
-    },
-    /// Synchronizes a wallet to make sure it's up to date.
-    Sync {
         #[structopt(flatten)]
         wargs: WalletArgs,
     },
@@ -297,12 +279,6 @@ fn main() -> http_types::Result<()> {
                 let txhash = wallet.wallet().await?.send_faucet().await?;
                 write_txhash(&mut twriter, &wallet.wallet, txhash)?;
             }
-            Args::AddCoin { wargs, coin } => {
-                wargs.wallet().await?.add_coin(coin).await?;
-                writeln!(twriter, "Coin successfully added!")?;
-                let summary = wargs.wallet().await?.summary().await?;
-                write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
-            }
             Args::Send {
                 wargs,
                 to,
@@ -325,10 +301,6 @@ fn main() -> http_types::Result<()> {
                     )
                     .await?;
                 send_tx(&mut twriter, stdin, wallet, tx).await?
-            }
-            Args::ForceRevert { wargs, txhash } => {
-                let wallet = wargs.wallet().await?;
-                wallet.force_revert_transaction(txhash.into()).await?;
             }
             Args::Stake {
                 wargs,
@@ -508,43 +480,6 @@ fn main() -> http_types::Result<()> {
                 write_txhash(&mut twriter, &wargs.wallet, txhash)?;
                 if wait {
                     wait_tx(&wallet, txhash).await?
-                }
-            }
-            Args::Sync { wargs } => {
-                let wallet = wargs.wallet().await?;
-                let pre_check = wallet.summary().await?;
-                wallet.check().await?;
-                let post_check = wallet.summary().await?;
-                for (denom, balance) in post_check.detailed_balance {
-                    let pre_balance = pre_check
-                        .detailed_balance
-                        .get(&denom)
-                        .cloned()
-                        .unwrap_or_default();
-                    let denom = match denom.as_str() {
-                        "6d" => "MEL",
-                        "73" => "SYM",
-                        "64" => "ERG",
-                        v => v,
-                    };
-                    if balance != pre_balance {
-                        writeln!(
-                            twriter,
-                            "{} {}=>{} {}",
-                            "updated".yellow().bold(),
-                            pre_balance,
-                            balance,
-                            denom
-                        )?;
-                    } else {
-                        writeln!(
-                            twriter,
-                            "{} {} {}",
-                            "confirmed".green().bold(),
-                            balance,
-                            denom
-                        )?;
-                    }
                 }
             }
             Args::LiqDeposit {

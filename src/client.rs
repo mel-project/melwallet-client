@@ -11,7 +11,7 @@ use themelio_structs::{
     CoinData, CoinID, Denom, Header, PoolState, StakeDoc, Transaction, TxHash, TxKind,
 };
 
-use crate::{structs::WalletSummary, DaemonError, TransactionStatus, WalletDump};
+use crate::{structs::WalletSummary, DaemonError, TransactionStatus};
 
 /// A client to a particular wallet daemon.
 #[derive(Clone, Debug)]
@@ -34,7 +34,7 @@ impl DaemonClient {
     }
 
     /// Dump a wallet.
-    pub async fn dump_wallet(&self, name: &str) -> Result<Option<WalletDump>, DaemonError> {
+    pub async fn summarize_wallet(&self, name: &str) -> Result<Option<WalletSummary>, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", name)).await?;
         if resp.status() == StatusCode::NotFound {
             return Ok(None);
@@ -45,7 +45,7 @@ impl DaemonClient {
     /// Gets a wallet
     pub async fn get_wallet(&self, name: &str) -> Result<Option<WalletClient>, DaemonError> {
         // needs to be dumpable
-        if self.dump_wallet(name).await?.is_some() {
+        if self.summarize_wallet(name).await?.is_some() {
             Ok(Some(WalletClient {
                 endpoint: self.endpoint,
                 wallet_name: name.to_string(),
@@ -136,7 +136,7 @@ async fn successful(mut resp: Response) -> Result<Response, DaemonError> {
 
 impl WalletClient {
     /// Dump a wallet.
-    pub async fn dump_wallet(&self) -> Result<WalletDump, DaemonError> {
+    pub async fn summarize_wallet(&self) -> Result<WalletSummary, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", self.wallet_name)).await?;
         Ok(resp.body_json().await?)
     }
@@ -230,21 +230,6 @@ impl WalletClient {
         .await?)
     }
 
-    /// Force-reverts a tx
-    pub async fn force_revert_transaction(&self, txhash: TxHash) -> Result<(), DaemonError> {
-        successful(
-            http_with_body(
-                self.endpoint,
-                &format!("wallets/{}/transactions/{}", self.wallet_name, txhash),
-                Method::Delete,
-                "".to_string(),
-            )
-            .await?,
-        )
-        .await?;
-        Ok(())
-    }
-
     /// Obtain a prepared transaction
     pub async fn prepare_transaction(
         &self,
@@ -320,21 +305,6 @@ impl WalletClient {
         }
     }
 
-    /// Adds a coin
-    pub async fn add_coin(&self, coin_id: CoinID) -> http_types::Result<()> {
-        successful(
-            http_with_body(
-                self.endpoint,
-                &format!("wallets/{}/coins/{}", &self.wallet_name, coin_id),
-                Method::Put,
-                vec![],
-            )
-            .await?,
-        )
-        .await?;
-        Ok(())
-    }
-
     /// Obtains the current wallet summary.
     pub async fn summary(&self) -> http_types::Result<WalletSummary> {
         Ok(successful(
@@ -347,19 +317,6 @@ impl WalletClient {
         .await?
         .body_json()
         .await?)
-    }
-
-    /// Self-checks the wallet.
-    pub async fn check(&self) -> http_types::Result<()> {
-        successful(
-            http_put(
-                self.endpoint,
-                &format!("wallets/{}/check", self.wallet_name),
-            )
-            .await?,
-        )
-        .await?;
-        Ok(())
     }
 
     /// Gets the name

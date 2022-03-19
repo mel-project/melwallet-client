@@ -20,29 +20,6 @@ pub struct WalletSummary {
     pub locked: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WalletDump {
-    pub summary: WalletSummary,
-    pub full: WalletData,
-}
-
-/// Immutable & cloneable in-memory data that can be persisted.
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct WalletData {
-    #[serde_as(as = "Vec<(_, _)>")]
-    pub unspent_coins: BTreeMap<CoinID, CoinDataHeight>,
-    #[serde_as(as = "Vec<(_, _)>")]
-    pub spent_coins: BTreeMap<CoinID, CoinDataHeight>,
-    #[serde(rename = "tx_in_progress_v2", default)]
-    pub tx_in_progress: BTreeMap<TxHash, (Transaction, BlockHeight)>,
-    pub tx_confirmed: BTreeMap<HashVal, (Transaction, BlockHeight)>,
-    pub my_covenant: Covenant,
-    #[serde(default)]
-    pub stake_list: BTreeMap<TxHash, StakeDoc>,
-    pub network: NetID,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TransactionStatus {
     pub raw: Transaction,
