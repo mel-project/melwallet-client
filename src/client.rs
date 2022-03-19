@@ -141,6 +141,17 @@ impl WalletClient {
         Ok(resp.body_json().await?)
     }
 
+    /// Dump a wallet's coins
+    pub async fn get_coins(&self) -> Result<BTreeMap<CoinID, CoinData>, DaemonError> {
+        let mut resp = http_get(
+            self.endpoint,
+            &format!("wallets/{}/coins", self.wallet_name),
+        )
+        .await?;
+        let vv: Vec<(CoinID, CoinData)> = resp.body_json().await?;
+        Ok(vv.into_iter().collect())
+    }
+
     /// Lock a wallet
     pub async fn lock(&self) -> Result<(), DaemonError> {
         successful(
