@@ -184,6 +184,23 @@ impl WalletClient {
         Ok(())
     }
 
+    /// Dumps the secret of a wallet, as a string
+    pub async fn export_sk(&self, password: Option<String>) -> Result<String, DaemonError> {
+        let mut val = HashMap::new();
+        val.insert("password", password);
+        let mut s = successful(
+            http_with_body(
+                self.endpoint,
+                &format!("wallets/{}/export-sk", self.wallet_name),
+                Method::Post,
+                serde_json::to_vec(&val).map_err(http_types::Error::from)?,
+            )
+            .await?,
+        )
+        .await?;
+        Ok(s.take_body().into_string().await?)
+    }
+
     /// Send a 1000 MEL faucet transaction
     pub async fn send_faucet(&self) -> Result<TxHash, DaemonError> {
         let hash_string: String = successful(

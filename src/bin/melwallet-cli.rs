@@ -106,6 +106,11 @@ enum Args {
         #[structopt(flatten)]
         wargs: WalletArgs,
     },
+    /// Exports the secret key of a wallet. Will read password from stdin.
+    ExportSk {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+    },
     /// Locks a wallet down again.
     Lock {
         #[structopt(flatten)]
@@ -383,6 +388,15 @@ fn main() -> http_types::Result<()> {
                 stdin.read_line(&mut pwd).await?;
                 pwd.truncate(pwd.len() - 1);
                 wallet.unlock(Some(pwd)).await?;
+            }
+            Args::ExportSk { wargs } => {
+                let wallet = wargs.wallet().await?;
+                eprint!("Enter password: ");
+                let mut pwd = "".to_string();
+                stdin.read_line(&mut pwd).await?;
+                pwd.truncate(pwd.len() - 1);
+                let sk = wallet.export_sk(Some(pwd)).await?;
+                writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
             }
             Args::Lock { wargs } => {
                 let wallet = wargs.wallet().await?;
