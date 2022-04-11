@@ -12,8 +12,51 @@ use themelio_structs::{
     Address, CoinData, CoinID, CoinValue, Denom, NetID, StakeDoc, Transaction, TxHash, TxKind,
     STAKE_EPOCH,
 };
+use once_cell::sync::OnceCell;
 use tmelcrypt::{Ed25519PK, HashVal};
 mod autoswap;
+
+
+
+
+#[derive(StructOpt, Clone, Debug)]
+struct CommonArgs {
+    #[structopt(long, default_value = "127.0.0.1:11773")]
+    /// HTTP endpoint of a running melwalletd instance
+    endpoint: SocketAddr,
+    
+    // raw json instead of human readable
+    #[structopt(long)]
+    raw: bool,
+}
+
+impl CommonArgs {
+    fn dclient(&self) -> DaemonClient {
+        DaemonClient::new(self.endpoint)
+    }
+}
+
+#[derive(StructOpt, Clone, Debug)]
+struct WalletArgs {
+    #[structopt(short)]
+    /// Name of the wallet to create or use
+    wallet: String,
+
+    #[structopt(flatten)]
+    common: CommonArgs,
+}
+
+impl WalletArgs {
+    async fn wallet(&self) -> http_types::Result<WalletClient> {
+        Ok(self
+            .common
+            .dclient()
+            .get_wallet(&self.wallet)
+            .await?
+            .context("no such wallet")?)
+    }
+}
+
 
 #[derive(StructOpt, Clone, Debug)]
 enum Args {
@@ -127,6 +170,18 @@ enum Args {
         /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/N-DOSC).
         pool: PoolKey,
     },
+    Import {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+
+        #[structopt(long)]
+        /// Whether or not to use the testnet.
+        testnet: bool,
+
+        #[structopt(long, short)]
+        /// The secret key of the wallet used to import
+        secret: String,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -173,40 +228,7 @@ impl FromStr for CoinDataWrapper {
             ),
         }
     }
-}
-
-#[derive(StructOpt, Clone, Debug)]
-struct WalletArgs {
-    #[structopt(short)]
-    /// Name of the wallet to create or use
-    wallet: String,
-
-    #[structopt(flatten)]
-    common: CommonArgs,
-}
-
-impl WalletArgs {
-    async fn wallet(&self) -> http_types::Result<WalletClient> {
-        Ok(self
-            .common
-            .dclient()
-            .get_wallet(&self.wallet)
-            .await?
-            .context("no such wallet")?)
-    }
-}
-
-#[derive(StructOpt, Clone, Debug)]
-struct CommonArgs {
-    #[structopt(long, default_value = "127.0.0.1:11773")]
-    /// HTTP endpoint of a running melwalletd instance
-    endpoint: SocketAddr,
-}
-
-impl CommonArgs {
-    fn dclient(&self) -> DaemonClient {
-        DaemonClient::new(self.endpoint)
-    }
+    
 }
 
 struct KillOnDrop(Option<Child>);
@@ -246,9 +268,9 @@ async fn wait_tx(wallet: &WalletClient, txhash: TxHash) -> http_types::Result<()
 fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
         let mut stdin = smol::io::BufReader::new(smol::Unblock::new(std::io::stdin()));
-        let mut twriter = TabWriter::new(std::io::stderr());
+        let mut twriter = TabWriter::new(vec![]);
         let args = Args::from_args();
-        match args {
+        let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs, testnet } => {
                 let dclient = wargs.common.dclient();
                 eprint!("Enter password: ");
@@ -256,7 +278,7 @@ fn main() -> http_types::Result<()> {
                 stdin.read_line(&mut pwd).await?;
                 pwd.truncate(pwd.len() - 1);
                 dclient
-                    .create_wallet(&wargs.wallet, testnet, Some(pwd))
+                    .create_wallet(&wargs.wallet, testnet, Some(pwd), None)
                     .await?;
                 let summary = dclient
                     .list_wallets()
@@ -264,25 +286,37 @@ fn main() -> http_types::Result<()> {
                     .get(&wargs.wallet)
                     .cloned()
                     .context("just-created wallet is now gone")?;
+                
                 write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
                 writeln!(twriter)?;
                 twriter.flush()?;
+                (serde_json::to_string_pretty(&summary)?, wargs.common)
             }
             Args::List(common) => {
                 let dclient = common.dclient();
                 let wallets = dclient.list_wallets().await?;
-                for (name, summary) in wallets {
+                // let mut wallets_json = "".to_string();
+                for (name, summary) in wallets.clone() {
+                    // let json_string = serde_json::to_string_pretty(&summary)?.to_owned();
+                    // wallets_json += &json_string;
                     write_wallet_summary(&mut twriter, &name, &summary)?;
                     writeln!(twriter)?;
                 }
+                (serde_json::to_string_pretty(&wallets)?.to_owned(), common)
+
             }
             Args::Summary(wallet) => {
                 let summary = wallet.wallet().await?.summary().await?;
                 write_wallet_summary(&mut twriter, &wallet.wallet, &summary)?;
+                (serde_json::to_string_pretty(&summary)?.to_owned(), wallet.common)
+
+
             }
             Args::SendFaucet(wallet) => {
                 let txhash = wallet.wallet().await?.send_faucet().await?;
                 write_txhash(&mut twriter, &wallet.wallet, txhash)?;
+                (serde_json::to_string_pretty(&txhash)?.to_owned(), wallet.common)
+
             }
             Args::Send {
                 wargs,
@@ -305,7 +339,9 @@ fn main() -> http_types::Result<()> {
                         vec![],
                     )
                     .await?;
-                send_tx(&mut twriter, stdin, wallet, tx).await?
+                send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
+                (serde_json::to_string_pretty(&tx)?.to_owned(), wargs.common)
+
             }
             Args::Stake {
                 wargs,
@@ -376,10 +412,14 @@ fn main() -> http_types::Result<()> {
                         pubkey: staker_pubkey,
                     })
                     .await?;
-                send_tx(&mut twriter, stdin, wallet, tx).await?
+                send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
+                (serde_json::to_string_pretty(&tx)?.to_owned(),wargs.common)
+
             }
             Args::WaitConfirmation { wargs, txhash } => {
-                wait_tx(&wargs.wallet().await?, TxHash(txhash)).await?
+                wait_tx(&wargs.wallet().await?, TxHash(txhash)).await?;
+                (serde_json::to_string_pretty(&txhash)?.to_owned(),wargs.common)
+
             }
             Args::Unlock { wargs } => {
                 let wallet = wargs.wallet().await?;
@@ -388,6 +428,7 @@ fn main() -> http_types::Result<()> {
                 stdin.read_line(&mut pwd).await?;
                 pwd.truncate(pwd.len() - 1);
                 wallet.unlock(Some(pwd)).await?;
+                ("".into(), wargs.common)
             }
             Args::ExportSk { wargs } => {
                 let wallet = wargs.wallet().await?;
@@ -397,10 +438,13 @@ fn main() -> http_types::Result<()> {
                 pwd.truncate(pwd.len() - 1);
                 let sk = wallet.export_sk(Some(pwd)).await?;
                 writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
+                (serde_json::to_string_pretty(&sk)?.to_owned(), wargs.common)
+
             }
             Args::Lock { wargs } => {
                 let wallet = wargs.wallet().await?;
                 wallet.lock().await?;
+                ("".into(), wargs.common)
             }
             Args::Pool {
                 common,
@@ -427,11 +471,14 @@ fn main() -> http_types::Result<()> {
                     format!("{}", ratio).bold().bright_green(),
                     pool.left.to_string().italic()
                 )?;
+                (serde_json::to_string_pretty(&pool_state)?.to_owned(),common)
+
             }
             Args::Autoswap { wargs, value } => {
                 let daemon = wargs.common.dclient();
                 let wallet = wargs.wallet().await?;
                 do_autoswap(daemon, wallet, value.into()).await;
+                ("".into(), wargs.common)
             }
             Args::Swap {
                 wargs,
@@ -440,6 +487,7 @@ fn main() -> http_types::Result<()> {
                 to,
                 wait,
             } => {
+                println!("wtf");
                 let wallet = wargs.wallet().await?;
                 let max_value =
                     wallet.summary().await?.detailed_balance[&hex::encode(from.to_bytes())];
@@ -490,11 +538,13 @@ fn main() -> http_types::Result<()> {
                 )?;
                 twriter.flush()?;
                 proceed_prompt(&mut stdin).await?;
-                let txhash = wallet.send_tx(to_send).await?;
+                let txhash = wallet.send_tx(to_send.clone()).await?;
                 write_txhash(&mut twriter, &wargs.wallet, txhash)?;
                 if wait {
                     wait_tx(&wallet, txhash).await?
                 }
+                (serde_json::to_string_pretty(&to_send)?.to_owned(),wargs.common)
+
             }
             Args::LiqDeposit {
                 wargs,
@@ -541,10 +591,47 @@ fn main() -> http_types::Result<()> {
                         vec![],
                     )
                     .await?;
-                send_tx(&mut twriter, stdin, wallet, tx).await?;
+                send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
+                (serde_json::to_string_pretty(&tx)?.to_owned(),wargs.common)
+
             }
-        }
+            Args::Import { 
+                wargs,
+                testnet,
+                secret
+             } => {
+                let dclient = wargs.common.dclient();
+                eprint!("Enter password: ");
+                let mut pwd = "".to_string();
+                stdin.read_line(&mut pwd).await?;
+                pwd.truncate(pwd.len() - 1);
+                dclient
+                    .create_wallet(&wargs.wallet, testnet, Some(pwd), Some(secret))
+                    .await?;
+                let summary = dclient
+                    .list_wallets()
+                    .await?
+                    .get(&wargs.wallet)
+                    .cloned()
+                    .context("just-created wallet is now gone")?;
+                
+                write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
+                writeln!(twriter)?;
+                twriter.flush()?;
+                (serde_json::to_string_pretty(&summary)?, wargs.common)
+            }
+        };
         twriter.flush()?;
+
+        println!("checking raw or not");
+        if !command_output.1.raw {
+            println!("not raw");
+            // std::io::stderr().write(&twriter.into_inner().unwrap()).context("writing output failed")?;
+        }
+        else{
+            println!("raw");
+            std::io::stdout().write(format!("{}\n", &command_output.0).as_bytes())?;
+        }
         Ok(())
     })
 }
