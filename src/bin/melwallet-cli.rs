@@ -268,7 +268,7 @@ async fn wait_tx(wallet: &WalletClient, txhash: TxHash) -> http_types::Result<()
 fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
         let mut stdin = smol::io::BufReader::new(smol::Unblock::new(std::io::stdin()));
-        let mut twriter = TabWriter::new(vec![]);
+        let mut twriter = TabWriter::new(std::io::stderr());
         let args = Args::from_args();
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs, testnet } => {
@@ -623,13 +623,10 @@ fn main() -> http_types::Result<()> {
         };
         twriter.flush()?;
 
-        println!("checking raw or not");
         if !command_output.1.raw {
-            println!("not raw");
             // std::io::stderr().write(&twriter.into_inner().unwrap()).context("writing output failed")?;
         }
         else{
-            println!("raw");
             std::io::stdout().write(format!("{}\n", &command_output.0).as_bytes())?;
         }
         Ok(())
