@@ -170,6 +170,7 @@ enum Args {
         /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/N-DOSC).
         pool: PoolKey,
     },
+    /// Provide a secret key to import an existing wallet
     Import {
         #[structopt(flatten)]
         wargs: WalletArgs,
@@ -487,7 +488,6 @@ fn main() -> http_types::Result<()> {
                 to,
                 wait,
             } => {
-                println!("wtf");
                 let wallet = wargs.wallet().await?;
                 let max_value =
                     wallet.summary().await?.detailed_balance[&hex::encode(from.to_bytes())];
