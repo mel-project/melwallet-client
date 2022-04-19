@@ -61,11 +61,16 @@ impl DaemonClient {
         name: &str,
         testnet: bool,
         password: Option<String>,
+        secret: Option<String>,
     ) -> Result<(), DaemonError> {
         let mut adhoc_obj = BTreeMap::new();
         adhoc_obj.insert(
             "testnet".to_string(),
             serde_json::to_value(testnet).unwrap(),
+        );
+        adhoc_obj.insert(
+            "secret".to_string(),
+            serde_json::to_value(secret.unwrap_or_default()).unwrap(),
         );
         if let Some(pwd) = password {
             adhoc_obj.insert("password".to_string(), serde_json::to_value(pwd).unwrap());

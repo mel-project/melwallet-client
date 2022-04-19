@@ -127,6 +127,18 @@ enum Args {
         /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/N-DOSC).
         pool: PoolKey,
     },
+    Import {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+
+        #[structopt(long)]
+        /// Whether or not to use the testnet.
+        testnet: bool,
+
+        #[structopt(long, short)]
+        /// The secret key of the wallet used to import
+        secret: String,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -256,7 +268,7 @@ fn main() -> http_types::Result<()> {
                 stdin.read_line(&mut pwd).await?;
                 pwd.truncate(pwd.len() - 1);
                 dclient
-                    .create_wallet(&wargs.wallet, testnet, Some(pwd))
+                    .create_wallet(&wargs.wallet, testnet, Some(pwd), None)
                     .await?;
                 let summary = dclient
                     .list_wallets()
@@ -268,6 +280,30 @@ fn main() -> http_types::Result<()> {
                 writeln!(twriter)?;
                 twriter.flush()?;
             }
+            Args::Import { 
+                wargs,
+                testnet,
+                secret
+             } => {
+                let dclient = wargs.common.dclient();
+                eprint!("Enter password: ");
+                let mut pwd = "".to_string();
+                stdin.read_line(&mut pwd).await?;
+                pwd.truncate(pwd.len() - 1);
+                dclient
+                    .create_wallet(&wargs.wallet, testnet, Some(pwd), Some(secret))
+                    .await?;
+                let summary = dclient
+                    .list_wallets()
+                    .await?
+                    .get(&wargs.wallet)
+                    .cloned()
+                    .context("just-created wallet is now gone")?;
+
+                write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
+                writeln!(twriter)?;
+                twriter.flush()?;
+             }
             Args::List(common) => {
                 let dclient = common.dclient();
                 let wallets = dclient.list_wallets().await?;
