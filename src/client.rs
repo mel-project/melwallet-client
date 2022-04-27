@@ -68,10 +68,7 @@ impl DaemonClient {
             "testnet".to_string(),
             serde_json::to_value(testnet).unwrap(),
         );
-        adhoc_obj.insert(
-            "secret".to_string(),
-            serde_json::to_value(secret.unwrap_or_default()).unwrap(),
-        );
+        adhoc_obj.insert("secret".to_string(), serde_json::to_value(secret).unwrap());
         if let Some(pwd) = password {
             adhoc_obj.insert("password".to_string(), serde_json::to_value(pwd).unwrap());
         }
@@ -87,7 +84,6 @@ impl DaemonClient {
         .await?;
         Ok(())
     }
-
 
     /// Obtains pool info.
     pub async fn get_pool(&self, pool: PoolKey, testnet: bool) -> Result<PoolState, DaemonError> {
