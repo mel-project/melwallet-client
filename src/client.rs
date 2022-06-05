@@ -95,7 +95,7 @@ impl DaemonClient {
                     pool.to_canonical()
                         .expect("daemon returned uncanonicalizable pool")
                         .to_string()
-                        .replace("/", ":"),
+                        .replace('/', ":"),
                     if testnet { "testnet=1" } else { "" }
                 ),
             )
@@ -311,7 +311,7 @@ impl WalletClient {
         &self,
         txhash: TxHash,
     ) -> http_types::Result<TransactionStatus> {
-        Ok(successful(
+        successful(
             http_get(
                 self.endpoint,
                 &format!("wallets/{}/transactions/{}", self.wallet_name, txhash),
@@ -320,7 +320,7 @@ impl WalletClient {
         )
         .await?
         .body_json()
-        .await?)
+        .await
     }
 
     /// Convenience method to wait until a transaction is confirmed
@@ -337,7 +337,7 @@ impl WalletClient {
 
     /// Obtains the current wallet summary.
     pub async fn summary(&self) -> http_types::Result<WalletSummary> {
-        Ok(successful(
+        successful(
             http_get(
                 self.endpoint,
                 &format!("wallets/{}?summary=1", self.wallet_name),
@@ -346,7 +346,7 @@ impl WalletClient {
         )
         .await?
         .body_json()
-        .await?)
+        .await
     }
 
     /// Gets the name
@@ -367,7 +367,7 @@ async fn http_get(endpoint: SocketAddr, path: &str) -> http_types::Result<Respon
     if let Some(token) = AUTH_TOKEN.as_ref() {
         req.insert_header("X-Melwalletd-Auth-Token", token);
     }
-    Ok(async_h1::connect(conn, req).await?)
+    async_h1::connect(conn, req).await
 }
 
 async fn http_put(endpoint: SocketAddr, path: &str) -> http_types::Result<Response> {
@@ -379,7 +379,7 @@ async fn http_put(endpoint: SocketAddr, path: &str) -> http_types::Result<Respon
     if let Some(token) = AUTH_TOKEN.as_ref() {
         req.insert_header("X-Melwalletd-Auth-Token", token);
     }
-    Ok(async_h1::connect(conn, req).await?)
+    async_h1::connect(conn, req).await
 }
 
 async fn http_with_body(
@@ -397,5 +397,5 @@ async fn http_with_body(
         req.insert_header("X-Melwalletd-Auth-Token", token);
     }
     let conn = TcpStream::connect(endpoint).await?;
-    Ok(async_h1::connect(conn, req).await?)
+    async_h1::connect(conn, req).await
 }

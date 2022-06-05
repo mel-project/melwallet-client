@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use themelio_stf::melvm::Covenant;
+
+
 use themelio_structs::{
-    Address, BlockHeight, CoinData, CoinDataHeight, CoinID, CoinValue, NetID, StakeDoc,
-    Transaction, TxHash,
+    Address, CoinData, CoinValue, NetID,
+    Transaction,
 };
-use tmelcrypt::HashVal;
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletSummary {

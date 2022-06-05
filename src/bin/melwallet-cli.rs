@@ -2,7 +2,7 @@ use anyhow::Context;
 use autoswap::do_autoswap;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
-use once_cell::sync::OnceCell;
+
 use smol::{prelude::*, process::Child};
 use std::{io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
@@ -269,10 +269,7 @@ fn main() -> http_types::Result<()> {
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs, testnet } => {
                 let dclient = wargs.common.dclient();
-                eprint!("Enter password: ");
-                let mut pwd = "".to_string();
-                stdin.read_line(&mut pwd).await?;
-                pwd.truncate(pwd.len() - 1);
+                let pwd = prompt_password(&mut stdin).await?;
                 dclient
                     .create_wallet(&wargs.wallet, testnet, Some(pwd), None)
                     .await?;
@@ -298,23 +295,17 @@ fn main() -> http_types::Result<()> {
                     write_wallet_summary(&mut twriter, &name, &summary)?;
                     writeln!(twriter)?;
                 }
-                (serde_json::to_string_pretty(&wallets)?.to_owned(), common)
+                (serde_json::to_string_pretty(&wallets)?, common)
             }
             Args::Summary(wallet) => {
                 let summary = wallet.wallet().await?.summary().await?;
                 write_wallet_summary(&mut twriter, &wallet.wallet, &summary)?;
-                (
-                    serde_json::to_string_pretty(&summary)?.to_owned(),
-                    wallet.common,
-                )
+                (serde_json::to_string_pretty(&summary)?, wallet.common)
             }
             Args::SendFaucet(wallet) => {
                 let txhash = wallet.wallet().await?.send_faucet().await?;
                 write_txhash(&mut twriter, &wallet.wallet, txhash)?;
-                (
-                    serde_json::to_string_pretty(&txhash)?.to_owned(),
-                    wallet.common,
-                )
+                (serde_json::to_string_pretty(&txhash)?, wallet.common)
             }
             Args::Send {
                 wargs,
@@ -338,7 +329,7 @@ fn main() -> http_types::Result<()> {
                     )
                     .await?;
                 send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
-                (serde_json::to_string_pretty(&tx)?.to_owned(), wargs.common)
+                (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
             Args::Stake {
                 wargs,
@@ -410,31 +401,24 @@ fn main() -> http_types::Result<()> {
                     })
                     .await?;
                 send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
-                (serde_json::to_string_pretty(&tx)?.to_owned(), wargs.common)
+                (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
             Args::WaitConfirmation { wargs, txhash } => {
                 wait_tx(&wargs.wallet().await?, TxHash(txhash)).await?;
-                (
-                    serde_json::to_string_pretty(&txhash)?.to_owned(),
-                    wargs.common,
-                )
+                (serde_json::to_string_pretty(&txhash)?, wargs.common)
             }
             Args::Unlock { wargs } => {
                 let wallet = wargs.wallet().await?;
-                eprint!("Enter password: ");
-                let mut pwd = "".to_string();
-                stdin.read_line(&mut pwd).await?;
-                wallet.unlock(Some(pwd.trim().to_string())).await?;
+                let pwd = prompt_password(&mut stdin).await?;
+                wallet.unlock(Some(pwd)).await?;
                 ("".into(), wargs.common)
             }
             Args::ExportSk { wargs } => {
                 let wallet = wargs.wallet().await?;
-                eprint!("Enter password: ");
-                let mut pwd = "".to_string();
-                stdin.read_line(&mut pwd).await?;
-                let sk = wallet.export_sk(Some(pwd.trim().to_string())).await?;
+                let pwd = prompt_password(&mut stdin).await?;
+                let sk = wallet.export_sk(Some(pwd)).await?;
                 writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
-                (serde_json::to_string_pretty(&sk)?.to_owned(), wargs.common)
+                (serde_json::to_string_pretty(&sk)?, wargs.common)
             }
             Args::Lock { wargs } => {
                 let wallet = wargs.wallet().await?;
@@ -466,10 +450,7 @@ fn main() -> http_types::Result<()> {
                     format!("{}", ratio).bold().bright_green(),
                     pool.left.to_string().italic()
                 )?;
-                (
-                    serde_json::to_string_pretty(&pool_state)?.to_owned(),
-                    common,
-                )
+                (serde_json::to_string_pretty(&pool_state)?, common)
             }
             Args::Autoswap { wargs, value } => {
                 let daemon = wargs.common.dclient();
@@ -539,10 +520,7 @@ fn main() -> http_types::Result<()> {
                 if wait {
                     wait_tx(&wallet, txhash).await?
                 }
-                (
-                    serde_json::to_string_pretty(&to_send)?.to_owned(),
-                    wargs.common,
-                )
+                (serde_json::to_string_pretty(&to_send)?, wargs.common)
             }
             Args::LiqDeposit {
                 wargs,
@@ -590,7 +568,7 @@ fn main() -> http_types::Result<()> {
                     )
                     .await?;
                 send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
-                (serde_json::to_string_pretty(&tx)?.to_owned(), wargs.common)
+                (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
             Args::Import {
                 wargs,
@@ -598,10 +576,7 @@ fn main() -> http_types::Result<()> {
                 secret,
             } => {
                 let dclient = wargs.common.dclient();
-                eprint!("Enter password: ");
-                let mut pwd = "".to_string();
-                stdin.read_line(&mut pwd).await?;
-                pwd.truncate(pwd.len() - 1);
+                let pwd = prompt_password(&mut stdin).await?;
                 dclient
                     .create_wallet(&wargs.wallet, testnet, Some(pwd), Some(secret))
                     .await?;
@@ -627,6 +602,13 @@ fn main() -> http_types::Result<()> {
         }
         Ok(())
     })
+}
+
+async fn prompt_password(mut stdin: impl AsyncBufRead + Unpin) -> anyhow::Result<String> {
+    eprint!("Enter password: ");
+    let mut pwd = "".to_string();
+    stdin.read_line(&mut pwd).await?;
+    Ok(pwd.trim().to_string())
 }
 
 async fn send_tx(
