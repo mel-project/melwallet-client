@@ -658,21 +658,7 @@ fn write_wallet_summary(
             "(unlocked)".green()
         }
     )?;
-    writeln!(
-        out,
-        "Network:\t{}",
-        match summary.network {
-            NetID::Mainnet => "mainnet".bright_green().bold(),
-            NetID::Testnet => "testnet".yellow().bold(),
-            NetID::Custom02 => todo!(),
-            NetID::Custom03 => todo!(),
-            NetID::Custom04 => todo!(),
-            NetID::Custom05 => todo!(),
-            NetID::Custom06 => todo!(),
-            NetID::Custom07 => todo!(),
-            NetID::Custom08 => todo!(),
-        }
-    )?;
+    writeln!(out, "Network:\t{}", summary.network)?;
     writeln!(
         out,
         "Address:\t{}",
