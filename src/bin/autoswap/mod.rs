@@ -21,7 +21,7 @@ async fn do_autoswap_once(
     value: CoinValue,
 ) -> http_types::Result<()> {
     // first, we get the relevant pool states
-    let is_testnet = wallet.summary().await?.network == NetID::Testnet;
+    let is_testnet = wallet.summary().await?.network;
     let ms_state = daemon
         .get_pool(PoolKey::new(Denom::Mel, Denom::Sym), is_testnet)
         .await?;

@@ -8,7 +8,7 @@ use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
 use themelio_stf::{melvm::Covenant, HexBytes, PoolKey};
 use themelio_structs::{
-    CoinData, CoinID, Denom, Header, PoolState, StakeDoc, Transaction, TxHash, TxKind,
+    CoinData, CoinID, Denom, Header, PoolState, StakeDoc, Transaction, TxHash, TxKind, NetID,
 };
 
 use crate::{structs::WalletSummary, DaemonError, TransactionStatus};
@@ -59,14 +59,13 @@ impl DaemonClient {
     pub async fn create_wallet(
         &self,
         name: &str,
-        testnet: bool,
         password: Option<String>,
         secret: Option<String>,
     ) -> Result<(), DaemonError> {
         let mut adhoc_obj = BTreeMap::new();
         adhoc_obj.insert(
             "testnet".to_string(),
-            serde_json::to_value(testnet).unwrap(),
+            serde_json::to_value(false).unwrap(),
         );
         adhoc_obj.insert("secret".to_string(), serde_json::to_value(secret).unwrap());
         if let Some(pwd) = password {
@@ -86,17 +85,17 @@ impl DaemonClient {
     }
 
     /// Obtains pool info.
-    pub async fn get_pool(&self, pool: PoolKey, testnet: bool) -> Result<PoolState, DaemonError> {
+    pub async fn get_pool(&self, pool: PoolKey, network: NetID) -> Result<PoolState, DaemonError> {
         Ok(successful(
             http_get(
                 self.endpoint,
                 &format!(
-                    "pools/{}?{}",
+                    "pools/{},{:?}",
                     pool.to_canonical()
                         .expect("daemon returned uncanonicalizable pool")
                         .to_string()
                         .replace('/', ":"),
-                    if testnet { "testnet=1" } else { "" }
+                    network
                 ),
             )
             .await?,
@@ -107,11 +106,11 @@ impl DaemonClient {
     }
 
     /// Obtains the latest header
-    pub async fn get_summary(&self, testnet: bool) -> Result<Header, DaemonError> {
+    pub async fn get_summary(&self, network: NetID) -> Result<Header, DaemonError> {
         Ok(successful(
             http_get(
                 self.endpoint,
-                &format!("summary?{}", if testnet { "testnet=1" } else { "" }),
+                &format!("summary?{:?}", network),
             )
             .await?,
         )

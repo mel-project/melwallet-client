@@ -22,10 +22,11 @@ struct CommonArgs {
     #[structopt(long, default_value = "127.0.0.1:11773")]
     /// HTTP endpoint of a running melwalletd instance
     endpoint: SocketAddr,
-
     // raw json instead of human readable
     #[structopt(long)]
     raw: bool,
+    #[structopt(long)]
+    network: bool,
 }
 
 impl CommonArgs {
@@ -61,8 +62,6 @@ enum Args {
     Create {
         #[structopt(flatten)]
         wargs: WalletArgs,
-        #[structopt(long)]
-        testnet: bool,
     },
     /// List all available wallets
     List(CommonArgs),
@@ -105,7 +104,7 @@ enum Args {
         /// Second denomination
         b_denom: Denom,
     },
-    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/NOM-DOSC pairs
+    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
     Autoswap {
         #[structopt(flatten)]
         wargs: WalletArgs,
@@ -278,11 +277,11 @@ fn main() -> http_types::Result<()> {
         let mut twriter = TabWriter::new(std::io::stderr());
         let args = Args::from_args();
         let command_output: (String, CommonArgs) = match args {
-            Args::Create { wargs, testnet } => {
+            Args::Create { wargs } => {
                 let dclient = wargs.common.dclient();
                 let pwd = prompt_password(&mut stdin).await?;
                 dclient
-                    .create_wallet(&wargs.wallet, testnet, Some(pwd), None)
+                    .create_wallet(&wargs.wallet , Some(pwd), None)
                     .await?;
                 let summary = dclient
                     .list_wallets()
@@ -365,7 +364,7 @@ fn main() -> http_types::Result<()> {
                 let last_header = wargs
                     .common
                     .dclient()
-                    .get_summary(wallet.summary().await?.network == NetID::Testnet)
+                    .get_summary(wallet.summary().await?.network)
                     .await?;
                 let next_epoch = last_header.height.epoch() + 1;
                 let start_epoch = start.unwrap_or_default().max(next_epoch);
