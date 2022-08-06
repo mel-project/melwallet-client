@@ -6,6 +6,7 @@ use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 use smol::{prelude::*, process::Child};
 use std::{io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
+use stdcode::StdcodeSerializeExt;
 use structopt::StructOpt;
 use tabwriter::TabWriter;
 use themelio_stf::{melvm::Covenant, PoolKey};
@@ -80,7 +81,7 @@ enum Args {
         #[structopt(flatten)]
         wargs: WalletArgs,
         /// How much money to swap
-        value: Option<u128>,
+        value: Option<CoinValue>,
         #[structopt(long, short)]
         /// "From" denomination.
         from: Denom,
@@ -96,11 +97,11 @@ enum Args {
         #[structopt(flatten)]
         wargs: WalletArgs,
         /// Number of the first denomination to deposit (in millionths)
-        a_count: u128,
+        a_count: CoinValue,
         /// First denomination
         a_denom: Denom,
         /// Number of the second denomination to deposit (in millionths)
-        b_count: u128,
+        b_count: CoinValue,
         /// Second denomination
         b_denom: Denom,
     },
@@ -116,7 +117,7 @@ enum Args {
         #[structopt(flatten)]
         wargs: WalletArgs,
         /// How many microsyms to stake
-        value: u128,
+        value: CoinValue,
         /// Ed25519 public key of the staker that receives voting rights
         staker_pubkey: String,
         /// When the stake takes effect. By default, as soon as possible.
@@ -139,6 +140,18 @@ enum Args {
         /// Additional covenants. This often must be specified if we are spending coins that belong to other addresses, like covenant coins.
         #[structopt(long)]
         add_covenant: Vec<String>,
+        /// Dry run; dumps out the transaction to send as a hex string.
+        #[structopt(long)]
+        dry_run: bool,
+        /// "Ballast" to add to the fee; 50 is plenty for an extra ed25519 signature added manually later.
+        #[structopt(long, default_value = "0")]
+        fee_ballast: usize,
+    },
+    /// Sends a raw transaction in hex, with no customization options.
+    SendRaw {
+        #[structopt(flatten)]
+        wargs: WalletArgs,
+        txhex: String,
     },
     /// Unlocks a wallet. Will read password from stdin.
     Unlock {
@@ -191,31 +204,29 @@ impl FromStr for CoinDataWrapper {
         match exploded.as_slice() {
             [dest, amount] => {
                 let dest: Address = dest.parse()?;
-                let amount: u128 = amount.parse()?;
+                let amount: CoinValue = amount.parse()?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
-                    value: amount.into(),
+                    value: amount,
                     denom: Denom::Mel,
                     additional_data: vec![],
                 }))
             }
             [dest, amount, denom] => {
                 let dest: Address = dest.parse()?;
-                let amount: u128 = amount.parse()?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
-                    value: amount.into(),
+                    value: amount.parse()?,
                     denom: denom.parse()?,
                     additional_data: vec![],
                 }))
             }
             &[dest, amount, denom, additional_data] => {
                 let dest: Address = dest.parse()?;
-                let amount: u128 = amount.parse()?;
                 let additional_data: Vec<u8> = hex::decode(&additional_data)?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
-                    value: amount.into(),
+                    value: amount.parse()?,
                     denom: denom.parse()?,
                     additional_data,
                 }))
@@ -312,6 +323,8 @@ fn main() -> http_types::Result<()> {
                 to,
                 force_spend,
                 add_covenant,
+                dry_run,
+                fee_ballast,
             } => {
                 let wallet = wargs.wallet().await?;
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
@@ -326,10 +339,16 @@ fn main() -> http_types::Result<()> {
                             .collect::<anyhow::Result<Vec<_>>>()?,
                         vec![],
                         vec![],
+                        fee_ballast,
                     )
                     .await?;
-                send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
-                (serde_json::to_string_pretty(&tx)?, wargs.common)
+                if dry_run {
+                    println!("{}", hex::encode(tx.stdcode()));
+                    (hex::encode(tx.stdcode()), wargs.common)
+                } else {
+                    send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
+                    (serde_json::to_string_pretty(&tx)?, wargs.common)
+                }
             }
             Args::Stake {
                 wargs,
@@ -396,7 +415,7 @@ fn main() -> http_types::Result<()> {
                     .prepare_stake_transaction(StakeDoc {
                         e_start: start_epoch,
                         e_post_end: post_end_epoch,
-                        syms_staked: value.into(),
+                        syms_staked: value,
                         pubkey: staker_pubkey,
                     })
                     .await?;
@@ -473,14 +492,14 @@ fn main() -> http_types::Result<()> {
                 } else {
                     max_value
                 };
-                let value = value.unwrap_or_else(|| max_value.into());
+                let value = value.unwrap_or(max_value);
                 let pool_key = PoolKey::new(from, to);
                 let to_send = wallet
                     .prepare_transaction(
                         TxKind::Swap,
                         vec![],
                         vec![CoinData {
-                            value: value.into(),
+                            value,
                             denom: from,
                             additional_data: vec![],
                             covhash: wallet.summary().await?.address,
@@ -488,13 +507,14 @@ fn main() -> http_types::Result<()> {
                         vec![],
                         pool_key.to_bytes(),
                         vec![],
+                        0,
                     )
                     .await?;
                 writeln!(twriter, "{}", "SWAPPING".bold())?;
                 writeln!(
                     twriter,
                     "From:\t{} {}",
-                    CoinValue(value).to_string().bold().bright_green(),
+                    value.to_string().bold().bright_green(),
                     from
                 )?;
                 let pool_state = wargs
@@ -503,9 +523,9 @@ fn main() -> http_types::Result<()> {
                     .get_pool(pool_key, wallet.summary().await?.network == NetID::Testnet)
                     .await?;
                 let to_value = if from == pool_key.right {
-                    pool_state.clone().swap_many(0, value).0
+                    pool_state.clone().swap_many(0, value.0).0
                 } else {
-                    pool_state.clone().swap_many(value, 0).1
+                    pool_state.clone().swap_many(value.0, 0).1
                 };
                 writeln!(
                     twriter,
@@ -550,13 +570,13 @@ fn main() -> http_types::Result<()> {
                         vec![],
                         vec![
                             CoinData {
-                                value: left_count.into(),
+                                value: left_count,
                                 denom: left_denom,
                                 covhash,
                                 additional_data: vec![],
                             },
                             CoinData {
-                                value: right_count.into(),
+                                value: right_count,
                                 denom: right_denom,
                                 covhash,
                                 additional_data: vec![],
@@ -565,6 +585,7 @@ fn main() -> http_types::Result<()> {
                         vec![],
                         poolkey.to_bytes(),
                         vec![],
+                        0,
                     )
                     .await?;
                 send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
@@ -591,6 +612,15 @@ fn main() -> http_types::Result<()> {
                 writeln!(twriter)?;
                 twriter.flush()?;
                 (serde_json::to_string_pretty(&summary)?, wargs.common)
+            }
+            Args::SendRaw { wargs, txhex } => {
+                let wallet = wargs.wallet().await?;
+                let tx: Transaction =
+                    stdcode::deserialize(&hex::decode(&txhex).context("cannot decode hex")?)
+                        .context("malformed transaction")?;
+
+                send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
+                (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
         };
         twriter.flush()?;
@@ -625,13 +655,7 @@ async fn send_tx(
             "{}\t{} {}\t{:?}",
             output.covhash.to_string().bright_blue(),
             output.value,
-            match output.denom {
-                Denom::Mel => "MEL",
-                Denom::Sym => "SYM",
-                Denom::Erg => "ERG",
-                Denom::Custom(_) => "(custom token)",
-                Denom::NewCoin => "(new token type)",
-            },
+            output.denom,
             hex::encode(&output.additional_data)
         )?;
     }

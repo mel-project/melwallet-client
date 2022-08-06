@@ -269,6 +269,7 @@ impl WalletClient {
         covenants: Vec<Covenant>,
         data: Vec<u8>,
         no_balance: Vec<Denom>,
+        fee_ballast: usize,
     ) -> Result<Transaction, DaemonError> {
         let mut adhoc = BTreeMap::new();
         adhoc.insert("kind".to_string(), serde_json::to_value(&kind).unwrap());
@@ -291,6 +292,10 @@ impl WalletClient {
         adhoc.insert(
             "covenants".to_string(),
             serde_json::to_value(covenants).unwrap(),
+        );
+        adhoc.insert(
+            "fee_ballast".to_string(),
+            serde_json::to_value(fee_ballast).unwrap(),
         );
         Ok(successful(
             http_with_body(
