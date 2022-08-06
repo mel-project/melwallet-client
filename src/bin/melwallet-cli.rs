@@ -22,11 +22,10 @@ struct CommonArgs {
     #[structopt(long, default_value = "127.0.0.1:11773")]
     /// HTTP endpoint of a running melwalletd instance
     endpoint: SocketAddr,
+
     // raw json instead of human readable
     #[structopt(long)]
     raw: bool,
-    #[structopt(long)]
-    network: bool,
 }
 
 impl CommonArgs {
@@ -104,7 +103,7 @@ enum Args {
         /// Second denomination
         b_denom: Denom,
     },
-    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
+    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/NOM-DOSC pairs
     Autoswap {
         #[structopt(flatten)]
         wargs: WalletArgs,
@@ -172,8 +171,6 @@ enum Args {
         #[structopt(flatten)]
         common: CommonArgs,
         #[structopt(long)]
-        /// Whether or not to use the testnet.
-        testnet: bool,
 
         /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/N-DOSC).
         pool: PoolKey,
@@ -182,10 +179,6 @@ enum Args {
     Import {
         #[structopt(flatten)]
         wargs: WalletArgs,
-
-        #[structopt(long)]
-        /// Whether or not to use the testnet.
-        testnet: bool,
 
         #[structopt(long, short)]
         /// The secret key of the wallet used to import
@@ -256,8 +249,10 @@ async fn wait_tx(wallet: &WalletClient, txhash: TxHash) -> http_types::Result<()
                 "(in block explorer: https://{}/blocks/{}/{})",
                 if wallet.summary().await?.network == NetID::Testnet {
                     "scan-testnet.themelio.org"
-                } else {
+                } else if wallet.summary().await?.network == NetID::Mainnet {
                     "scan.themelio.org"
+                } else {
+                    ""
                 },
                 height,
                 txhash
@@ -281,7 +276,7 @@ fn main() -> http_types::Result<()> {
                 let dclient = wargs.common.dclient();
                 let pwd = prompt_password(&mut stdin).await?;
                 dclient
-                    .create_wallet(&wargs.wallet , Some(pwd), None)
+                    .create_wallet(&wargs.wallet, testnet, Some(pwd), None)
                     .await?;
                 let summary = dclient
                     .list_wallets()
@@ -364,7 +359,7 @@ fn main() -> http_types::Result<()> {
                 let last_header = wargs
                     .common
                     .dclient()
-                    .get_summary(wallet.summary().await?.network)
+                    .get_summary(wallet.summary().await?.network == NetID::Testnet)
                     .await?;
                 let next_epoch = last_header.height.epoch() + 1;
                 let start_epoch = start.unwrap_or_default().max(next_epoch);
