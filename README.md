@@ -91,7 +91,8 @@ We are working all the time to make these messages as helpful as possible, if yo
 
 ## Basic Uses
 
-### Creating a wallet
+As a thin-client of `melwalletd`, `melwallet-cli` needs access to an instance of `melwalletd`. Learn how to run the wallet daemon on the docs page: https://docs.themelio.org/try-themelio/my-first-tx/. The rest of the documentation assumes `melwalletd` is running locally in the background.
+### `create`
 
 ``` 
 $ melwallet-cli create -w test_wallet
@@ -102,6 +103,37 @@ Address:      t20aexrbvnxgcpmyzbzcemv8651s40rqe0we8a33ebadyrhb87k930
 Balance:      0.000000  MEL
 Staked:       0.000000  SYM
 ```
+
+As you can see here we used the `create` verb with the `-w` flag to create a wallet named `test_wallet`. This command outputs a formatted summary of the newly created wallet.
+
+
+### `send-faucet` (testnet only)
+
+```
+$ melwallet-cli send-faucet -w test_wallet
+Transaction hash:  c55cb04275fe0d6c618a51e04eb82b1a43487b499d8cca28d5d7ec2247f5047d
+(wait for confirmation with melwallet-cli wait-confirmation -w test_wallet c55cb04275fe0d6c618a51e04eb82b1a43487b499d8cca28d5d7ec2247f5047d)
+```
+
+When needed, 1001 fake `MEL` can be collected from the network using the `send-faucet` verb. This verb outputs the transaction hash, along with another command using the `wait-confirmation` verb. If used, this command will cause the terminal to wait for a transaction to be accepted by the blockchain.
+
+
+
+### `summary`
+
+```
+$ melwallet-cli summary -w test_wallet
+Wallet name:  test_wallet (locked)
+Network:      testnet
+Address:      t20aexrbvnxgcpmyzbzcemv8651s40rqe0we8a33ebadyrhb87k930
+Balance:      1001.000000  MEL
+Staked:       0.000000     SYM
+```
+
+This command outputs a wallet summary consisting of the `network` this wallet belongs to, the `address` associated with this wallet, the `balance` (which contains `MEL` from a `send-faucet` transaction), and the amount of `SYM` staked on the network. 
+
+### `send`
+
 
 ## Advanced Uses
 
