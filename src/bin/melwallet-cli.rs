@@ -1,10 +1,13 @@
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use autoswap::do_autoswap;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 
+use once_cell::sync::{Lazy, OnceCell};
 use smol::{prelude::*, process::Child};
-use std::io::BufReader;
+use std::convert::TryInto;
+use std::io::{BufRead, BufReader, Stdin};
+use std::sync::Mutex;
 use std::{io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use stdcode::StdcodeSerializeExt;
@@ -243,6 +246,9 @@ impl Drop for KillOnDrop {
     }
 }
 
+static STDIN_BUFFER: Lazy<Mutex<BufReader<Stdin>>> =
+    Lazy::new(|| Mutex::new(BufReader::new(std::io::stdin())));
+
 async fn wait_tx(wallet: &WalletClient, txhash: TxHash) -> http_types::Result<()> {
     loop {
         let status = wallet.get_transaction_status(txhash).await?;
@@ -277,7 +283,7 @@ fn main() -> http_types::Result<()> {
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs } => {
                 let dclient = wargs.common.dclient();
-                let pwd = prompt_password(&mut stdin).await?;
+                let pwd = enter_password_prompt().await?;
                 dclient
                     .create_wallet(&wargs.wallet, Some(pwd), None)
                     .await?;
@@ -421,7 +427,7 @@ fn main() -> http_types::Result<()> {
             }
             Args::Unlock { wargs } => {
                 let wallet = wargs.wallet().await?;
-                let pwd = prompt_password(&mut stdin).await?;
+                let pwd = enter_password_prompt().await?;
                 wallet.unlock(Some(pwd)).await?;
                 ("".into(), wargs.common)
             }
@@ -579,7 +585,7 @@ fn main() -> http_types::Result<()> {
             }
             Args::Import { wargs, secret } => {
                 let dclient = wargs.common.dclient();
-                let pwd = prompt_password(&mut stdin).await?;
+                let pwd = enter_password_prompt().await?;
                 dclient
                     .create_wallet(&wargs.wallet, Some(pwd), Some(secret))
                     .await?;
@@ -622,19 +628,35 @@ fn main() -> http_types::Result<()> {
     })
 }
 
-async fn prompt_password(mut stdin: impl AsyncBufRead + Unpin ) -> anyhow::Result<String> {
-    eprint!("Enter password: ");
-    let mut reader = BufReader::new(std::io::stdin()); 
-    let  pwd = rpassword::read_password_from_bufread(&mut reader).unwrap();
+async fn prompt_password(prompt: &str) -> anyhow::Result<String> {
+    eprint!("{prompt}");
+    let pwd = smol::unblock(|| {
+         match STDIN_BUFFER
+            .lock()
+            .as_deref_mut() {
+                Ok(buffer) => {
+                    anyhow::Ok(rpassword::read_password_from_bufread(buffer).unwrap())
+                },
+                Err(_) =>  Err(anyhow::anyhow!("unknown buffer unlock problem")),
+            }
+
+      
+    })
+    .await?;
+
     Ok(pwd.trim().to_string())
 }
-async fn prompt_password_with_confirmation(mut stdin: impl AsyncBufRead + Unpin) -> anyhow::Result<String>{
-    let pwd1 = prompt_password(stdin).await?;
-    eprint!("Confirm password: ");
-    let pwd2 = rpassword::read_password().unwrap();
+
+async fn enter_password_prompt() -> anyhow::Result<String> {
+    prompt_password("Enter Password").await
+}
+
+async fn prompt_password_with_confirmation() -> anyhow::Result<String> {
+    let pwd1 = prompt_password("Enter Password").await?;
+    let pwd2 = prompt_password("Confirm password: ").await?;
     match pwd1 == pwd2 {
         true => Ok(pwd1),
-        false => Err(anyhow::anyhow!("Passwords do not match"))
+        false => Err(anyhow::anyhow!("Passwords do not match")),
     }
 }
 
