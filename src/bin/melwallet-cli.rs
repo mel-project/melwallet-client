@@ -627,6 +627,15 @@ async fn prompt_password(mut stdin: impl AsyncBufRead + Unpin) -> anyhow::Result
     let  pwd = rpassword::read_password().unwrap();
     Ok(pwd.trim().to_string())
 }
+async fn prompt_password_with_confirmation(mut stdin: impl AsyncBufRead + Unpin) -> anyhow::Result<String>{
+    let pwd1 = prompt_password(stdin).await?;
+    eprint!("Confirm password: ");
+    let pwd2 = rpassword::read_password().unwrap();
+    match pwd1 == pwd2 {
+        true => Ok(pwd1),
+        false => Err(anyhow::anyhow!("Passwords do not match"))
+    }
+}
 
 async fn send_tx(
     mut twriter: impl Write,
