@@ -88,6 +88,21 @@ OPTIONS:
 ```
 
 We are working all the time to make these messages as helpful as possible, if you have any suggestions please shoot us a line on [matrix](https://matrix.to/#/#general:matrix.themelio.org) or [discord](https://discord.gg/themelio)
+
+## Basic Uses
+
+### Creating a wallet
+
+``` 
+$ melwallet-cli create -w test_wallet
+Enter password: <your password>
+Wallet name:  test_wallet (locked)
+Network:      testnet
+Address:      t20aexrbvnxgcpmyzbzcemv8651s40rqe0we8a33ebadyrhb87k930
+Balance:      0.000000  MEL
+Staked:       0.000000  SYM
+```
+
 ## Advanced Uses
 
 `melwallet-cli` can also be used to deploy scripts, called covenants, on Themelio. Learn more about deploying covenants [here](https://guide.melodeonlang.org/9_deploying_covenants.html).

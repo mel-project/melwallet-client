@@ -4,6 +4,7 @@ use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 
 use smol::{prelude::*, process::Child};
+use std::io::BufRead;
 use std::{io::Write, time::Duration};
 use std::{net::SocketAddr, str::FromStr};
 use stdcode::StdcodeSerializeExt;
@@ -623,8 +624,7 @@ fn main() -> http_types::Result<()> {
 
 async fn prompt_password(mut stdin: impl AsyncBufRead + Unpin) -> anyhow::Result<String> {
     eprint!("Enter password: ");
-    let mut pwd = "".to_string();
-    stdin.read_line(&mut pwd).await?;
+    let  pwd = rpassword::read_password().unwrap();
     Ok(pwd.trim().to_string())
 }
 
