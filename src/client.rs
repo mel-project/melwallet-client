@@ -63,10 +63,7 @@ impl DaemonClient {
         secret: Option<String>,
     ) -> Result<(), DaemonError> {
         let mut adhoc_obj = BTreeMap::new();
-        adhoc_obj.insert(
-            "testnet".to_string(),
-            serde_json::to_value(false).unwrap(),
-        );
+
         adhoc_obj.insert("secret".to_string(), serde_json::to_value(secret).unwrap());
         if let Some(pwd) = password {
             adhoc_obj.insert("password".to_string(), serde_json::to_value(pwd).unwrap());
@@ -85,7 +82,8 @@ impl DaemonClient {
     }
 
     /// Obtains pool info.
-    pub async fn get_pool(&self, pool: PoolKey, network: NetID) -> Result<PoolState, DaemonError> {
+    pub async fn get_pool(&self, pool: PoolKey) -> Result<PoolState, DaemonError> {
+        let network = self.network().await?;
         Ok(successful(
             http_get(
                 self.endpoint,
@@ -105,12 +103,24 @@ impl DaemonClient {
         .await?)
     }
 
+    pub async fn network(&self) -> http_types::Result<NetID>{
+        successful(
+            http_get(
+                self.endpoint,
+                "network",
+            )
+            .await?,
+        )
+        .await?
+        .body_json()
+        .await
+    }
     /// Obtains the latest header
-    pub async fn get_summary(&self, network: NetID) -> Result<Header, DaemonError> {
+    pub async fn get_summary(&self) -> Result<Header, DaemonError> {
         Ok(successful(
             http_get(
                 self.endpoint,
-                &format!("summary?{:?}", network),
+                "summary",
             )
             .await?,
         )
@@ -259,6 +269,7 @@ impl WalletClient {
         .await?)
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Obtain a prepared transaction
     pub async fn prepare_transaction(
         &self,
@@ -344,7 +355,7 @@ impl WalletClient {
         successful(
             http_get(
                 self.endpoint,
-                &format!("wallets/{}?summary=1", self.wallet_name),
+                &format!("wallets/{}?summary=1", self.wallet_name), // TODO: any reason for the summary arg?
             )
             .await?,
         )
@@ -374,6 +385,7 @@ async fn http_get(endpoint: SocketAddr, path: &str) -> http_types::Result<Respon
     async_h1::connect(conn, req).await
 }
 
+#[allow(dead_code)]
 async fn http_put(endpoint: SocketAddr, path: &str) -> http_types::Result<Response> {
     let conn = TcpStream::connect(endpoint).await?;
     let mut req = Request::new(

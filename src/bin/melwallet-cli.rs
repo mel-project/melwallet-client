@@ -22,7 +22,6 @@ struct CommonArgs {
     #[structopt(long, default_value = "127.0.0.1:11773")]
     /// HTTP endpoint of a running melwalletd instance
     endpoint: SocketAddr,
-
     // raw json instead of human readable
     #[structopt(long)]
     raw: bool,
@@ -184,6 +183,9 @@ enum Args {
         /// The secret key of the wallet used to import
         secret: String,
     },
+
+    /// Display the NetID for the connected melwalletd instance
+    Network(CommonArgs),
 }
 
 #[derive(Clone, Debug)]
@@ -276,7 +278,7 @@ fn main() -> http_types::Result<()> {
                 let dclient = wargs.common.dclient();
                 let pwd = prompt_password(&mut stdin).await?;
                 dclient
-                    .create_wallet(&wargs.wallet, testnet, Some(pwd), None)
+                    .create_wallet(&wargs.wallet, Some(pwd), None)
                     .await?;
                 let summary = dclient
                     .list_wallets()
@@ -356,11 +358,7 @@ fn main() -> http_types::Result<()> {
                 )
                 .context("staker pubkey must be 32 bytes")?;
                 let wallet = wargs.wallet().await?;
-                let last_header = wargs
-                    .common
-                    .dclient()
-                    .get_summary(wallet.summary().await?.network == NetID::Testnet)
-                    .await?;
+                let last_header = wargs.common.dclient().get_summary().await?;
                 let next_epoch = last_header.height.epoch() + 1;
                 let start_epoch = start.unwrap_or_default().max(next_epoch);
                 let duration = duration.unwrap_or(1);
@@ -438,14 +436,10 @@ fn main() -> http_types::Result<()> {
                 wallet.lock().await?;
                 ("".into(), wargs.common)
             }
-            Args::Pool {
-                common,
-                pool,
-                testnet,
-            } => {
+            Args::Pool { common, pool } => {
                 let pool = pool.to_canonical().context("cannot canonicalize")?;
                 let client = common.dclient();
-                let pool_state = client.get_pool(pool, testnet).await?;
+                let pool_state = client.get_pool(pool).await?;
                 let ratio = pool_state.lefts as f64 / pool_state.rights as f64;
                 writeln!(
                     twriter,
@@ -511,11 +505,8 @@ fn main() -> http_types::Result<()> {
                     value.to_string().bold().bright_green(),
                     from
                 )?;
-                let pool_state = wargs
-                    .common
-                    .dclient()
-                    .get_pool(pool_key, wallet.summary().await?.network == NetID::Testnet)
-                    .await?;
+                let dclient = wargs.common.dclient();
+                let pool_state = dclient.get_pool(pool_key).await?;
                 let to_value = if from == pool_key.right {
                     pool_state.clone().swap_many(0, value.0).0
                 } else {
@@ -585,15 +576,11 @@ fn main() -> http_types::Result<()> {
                 send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
                 (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
-            Args::Import {
-                wargs,
-                testnet,
-                secret,
-            } => {
+            Args::Import { wargs, secret } => {
                 let dclient = wargs.common.dclient();
                 let pwd = prompt_password(&mut stdin).await?;
                 dclient
-                    .create_wallet(&wargs.wallet, testnet, Some(pwd), Some(secret))
+                    .create_wallet(&wargs.wallet, Some(pwd), Some(secret))
                     .await?;
                 let summary = dclient
                     .list_wallets()
@@ -615,6 +602,12 @@ fn main() -> http_types::Result<()> {
 
                 send_tx(&mut twriter, stdin, wallet, tx.clone()).await?;
                 (serde_json::to_string_pretty(&tx)?, wargs.common)
+            }
+            Args::Network(args) => {
+                let netid = args.dclient().network().await?.to_string();
+                writeln!(twriter, "Network: {netid}")?;
+
+                (netid, args)
             }
         };
         twriter.flush()?;
@@ -682,11 +675,7 @@ fn write_wallet_summary(
         "Address:\t{}",
         summary.address.to_string().bright_blue()
     )?;
-    writeln!(
-        out,
-        "Balance:\t{}",
-        format!("{}\tMEL", summary.total_micromel)
-    )?;
+    writeln!(out, "Balance:\t{}\tMEL", summary.total_micromel)?;
     for (k, v) in summary.detailed_balance.iter() {
         let denom = match k.as_str() {
             "6d" => continue,
@@ -696,11 +685,7 @@ fn write_wallet_summary(
         };
         writeln!(out, "\t{}\t{}", v, denom)?;
     }
-    writeln!(
-        out,
-        "Staked:\t{}",
-        format!("{}\tSYM", summary.staked_microsym)
-    )?;
+    writeln!(out, "Staked:\t{}\tSYM", summary.staked_microsym)?;
     Ok(())
 }
 

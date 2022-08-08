@@ -4,7 +4,7 @@ use crate::wait_tx;
 use colored::Colorize;
 use melwallet_client::{DaemonClient, WalletClient};
 use themelio_stf::PoolKey;
-use themelio_structs::{CoinData, CoinValue, Denom, NetID, Transaction, TxKind};
+use themelio_structs::{CoinData, CoinValue, Denom, Transaction, TxKind};
 
 /// Execute arbitrage
 pub async fn do_autoswap(daemon: DaemonClient, wallet: WalletClient, value: CoinValue) {
@@ -21,15 +21,14 @@ async fn do_autoswap_once(
     value: CoinValue,
 ) -> http_types::Result<()> {
     // first, we get the relevant pool states
-    let is_testnet = wallet.summary().await?.network;
     let ms_state = daemon
-        .get_pool(PoolKey::new(Denom::Mel, Denom::Sym), is_testnet)
+        .get_pool(PoolKey::new(Denom::Mel, Denom::Sym))
         .await?;
     let dm_state = daemon
-        .get_pool(PoolKey::new(Denom::Mel, Denom::Erg), is_testnet)
+        .get_pool(PoolKey::new(Denom::Mel, Denom::Erg))
         .await?;
     let ds_state = daemon
-        .get_pool(PoolKey::new(Denom::Sym, Denom::Erg), is_testnet)
+        .get_pool(PoolKey::new(Denom::Sym, Denom::Erg))
         .await?;
     // either m->s->d->m or m->d->s->m. these are the only two paths
     let msdm_payoff = {
