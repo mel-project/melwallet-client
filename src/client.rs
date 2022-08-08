@@ -8,7 +8,7 @@ use http_types::{Body, Method, Request, Response, StatusCode, Url};
 use smol::net::TcpStream;
 use themelio_stf::{melvm::Covenant, HexBytes, PoolKey};
 use themelio_structs::{
-    CoinData, CoinID, Denom, Header, PoolState, StakeDoc, Transaction, TxHash, TxKind, NetID,
+    CoinData, CoinID, Denom, Header, PoolState, StakeDoc, Transaction, TxHash, TxKind,
 };
 
 use crate::{structs::WalletSummary, DaemonError, TransactionStatus};
@@ -83,7 +83,7 @@ impl DaemonClient {
 
     /// Obtains pool info.
     pub async fn get_pool(&self, pool: PoolKey) -> Result<PoolState, DaemonError> {
-        let network = self.network().await?;
+        let network = self.get_summary().await?.network;
         Ok(successful(
             http_get(
                 self.endpoint,
@@ -103,18 +103,6 @@ impl DaemonClient {
         .await?)
     }
 
-    pub async fn network(&self) -> http_types::Result<NetID>{
-        successful(
-            http_get(
-                self.endpoint,
-                "network",
-            )
-            .await?,
-        )
-        .await?
-        .body_json()
-        .await
-    }
     /// Obtains the latest header
     pub async fn get_summary(&self) -> Result<Header, DaemonError> {
         Ok(successful(
