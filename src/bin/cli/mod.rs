@@ -2,7 +2,7 @@
 use anyhow::Context;
 use melwallet_client::{DaemonClient, WalletClient};
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, crate_version};
 use std::{net::SocketAddr, str::FromStr};
 use themelio_stf::{ PoolKey};
 use themelio_structs::{
@@ -57,6 +57,10 @@ impl FromStr for CoinDataWrapper {
 
 
 #[derive(Parser, Clone, Debug)]
+#[clap(
+    version(crate_version!()),
+    propagate_version(true)
+)]
 pub struct CommonArgs {
     #[clap(long, default_value = "127.0.0.1:11773")]
     /// HTTP endpoint of a running melwalletd instance

@@ -30,32 +30,37 @@ To find out about `melwallet-cli`s capabilities, use the `--help` flag
 ``` 
 $ melwallet-cli --help
 
-melwallet-client x.x.x
+melwallet-client
 
 USAGE:
     melwallet-cli <SUBCOMMAND>
 
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+OPTIONS:
+    -h, --help    Print help information
 
 SUBCOMMANDS:
-    autoswap             Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
-    create               Create a wallet
-    export-sk            Exports the secret key of a wallet. Will read password from stdin
-    help                 Prints this message or the help of the given subcommand(s)
-    import               Provide a secret key to import an existing wallet
-    liq-deposit          Supplies liquidity to Melswap
-    list                 List all available wallets
-    lock                 Locks a wallet down again
-    pool                 Checks a pool
-    send                 Send a transaction to the network
-    send-faucet          Send a 1000 MEL faucet transaction for a testnet wallet
-    stake                Stakes a certain number of syms
-    summary              Details of a wallet
-    swap                 Swaps money from one denomination to another
-    unlock               Unlocks a wallet. Will read password from stdin
-    wait-confirmation    Wait for a particular transaction to confirm
+    autoswap                 Automatically executes arbitrage trades on the core, "triangular"
+                                 MEL/SYM/NOM-DOSC pairs
+    create                   Create a wallet
+    export-sk                Exports the secret key of a wallet. Will read password from stdin
+    generate-autocomplete    Generate bash autocompletions
+    help                     Print this message or the help of the given subcommand(s)
+    import                   Provide a secret key to import an existing wallet
+    liq-deposit              Supplies liquidity to Melswap
+    list                     List all available wallets
+    lock                     Locks a wallet down again
+    network-summary          Show the summary of the network connected to the associated
+                                 melwalletd instance
+    pool                     Checks a pool
+    send                     Send a transaction to the network
+    send-faucet              Send a 1000 MEL faucet transaction for a testnet wallet
+    send-raw                 Sends a raw transaction in hex, with no customization options
+    stake                    Stakes a certain number of syms
+    summary                  Details of a wallet
+    swap                     Swaps money from one denomination to another
+    unlock                   Unlocks a wallet. Will read password from stdin
+    wait-confirmation        Wait for a particular transaction to confirm
+
 ```
 
 As described above, all the `melwalletd` endpoints are available through the use of subcommands. Taking a look inside one of the subcommands you'll see even more helpful messages 
@@ -133,7 +138,17 @@ Staked:       0.000000     SYM
 This command outputs a wallet summary consisting of the `network` this wallet belongs to, the `address` associated with this wallet, the `balance` (which contains `MEL` from a `send-faucet` transaction), and the amount of `SYM` staked on the network. 
 
 ### `send`
+```
+$ melwallet-cli send -w testing123 --to t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg,1000.0
+TRANSACTION RECIPIENTS
+Address                                                 Amount           Additional data
+t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  1000.000000 MEL  ""
+t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  0.499803 MEL     ""
+t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  0.499804 MEL     ""
+ (network fees)                                         0.000393 MEL
+Proceed? [y/N] 
 
+```
 
 ## Advanced Uses
 

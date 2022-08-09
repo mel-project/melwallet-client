@@ -122,7 +122,6 @@ fn main() -> http_types::Result<()> {
                 fee_ballast,
             } => {
                 let wallet = wargs.wallet().await?;
-                println!("never");
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
                 let tx = wallet
                     .prepare_transaction(
@@ -545,23 +544,23 @@ fn write_txhash(out: &mut impl Write, wallet_name: &str, txhash: TxHash) -> anyh
 
 async fn proceed_prompt() -> anyhow::Result<()> {
     eprintln!("Proceed? [y/N] ");
-    let mut letter = [0u8; 1];
 
-    smol::unblock(move || {
+    let letter = smol::unblock(move || {
+        let mut letter = [0u8; 1];
+
         match STDIN_BUFFER.lock().as_deref_mut() {
             Ok(stdin) => {
                 while letter[0].is_ascii_whitespace() || letter[0] == 0 {
                     // stdin.read_exact(&mut letter)
                     stdin.read_exact(&mut letter)?;
                 }
-                Ok(())
+                Ok(letter)
             }
             Err(_) => return Err(anyhow::anyhow!("unknown buffer unlock problem")),
         }
     })
     .await?;
-
-    if letter[0] != 0x79 {
+    if letter[0].to_ascii_lowercase() != b'y'  {
         anyhow::bail!("canceled");
     }
     Ok(())
