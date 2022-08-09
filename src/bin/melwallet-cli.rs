@@ -3,7 +3,7 @@ use autoswap::do_autoswap;
 use colored::{Color, ColoredString, Colorize};
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 
-use clap::Parser;
+use clap::{Parser, CommandFactory};
 use once_cell::sync::Lazy;
 use smol::process::Child;
 use std::collections::BTreeMap;
@@ -18,13 +18,12 @@ use themelio_structs::{
     Address, CoinData, CoinID, CoinValue, Denom, NetID, StakeDoc, Transaction, TxHash, TxKind,
     STAKE_EPOCH,
 };
-use tmelcrypt::{Ed25519PK, HashVal};
+use tmelcrypt::Ed25519PK;
 mod autoswap;
 mod cli;
 
-use cli::*;
-
-
+use cli::{Args, CommonArgs, Cmd};
+use clap_complete::{generate, shells::Bash};
 struct KillOnDrop(Option<Child>);
 
 impl Drop for KillOnDrop {
@@ -64,11 +63,16 @@ async fn wait_tx(wallet: &WalletClient, txhash: TxHash) -> http_types::Result<()
     Ok(())
 }
 
-fn _main() -> http_types::Result<()> {
+fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
         let mut twriter = TabWriter::new(std::io::stderr());
-        let args = Args::from_args();
+        let mut command = Cmd::command();
+        let args = Cmd::from_args();
+        if let Args::Complete = args{
+                generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
+        };
         let command_output: (String, CommonArgs) = match args {
+
             Args::Create { wargs } => {
                 let dclient = wargs.common.dclient();
                 let pwd = enter_password_prompt().await?;
@@ -418,6 +422,7 @@ fn _main() -> http_types::Result<()> {
                 writeln!(twriter)?;
                 (header_string, args)
             }
+            _ => return Ok(())
         };
         twriter.flush()?;
 
