@@ -109,7 +109,7 @@ Balance:      0.000000  MEL
 Staked:       0.000000  SYM
 ```
 
-As you can see here we used the `create` verb with the `-w` flag to create a wallet named `test_wallet`. This command outputs a formatted summary of the newly created wallet.
+As you can see here we used the `create` verb with the `-w` flag, short for `--wallet`, to create a wallet named `test_wallet`. This command outputs a formatted summary of the newly created wallet.
 
 
 ### `send-faucet` (testnet only)
@@ -135,20 +135,25 @@ Balance:      1001.000000  MEL
 Staked:       0.000000     SYM
 ```
 
-This command outputs a wallet summary consisting of the `network` this wallet belongs to, the `address` associated with this wallet, the `balance` (which contains `MEL` from a `send-faucet` transaction), and the amount of `SYM` staked on the network. 
+This command outputs a wallet summary for the wallet name specified by `-w`, `test_wallet`, consisting of the `network` this wallet belongs to, the `address` associated with this wallet, the `balance` (which contains `MEL` from a `send-faucet` transaction), and the amount of `SYM` staked on the network; identical to the summary produced by the [`create`](#create) verb
 
 ### `send`
-```
-$ melwallet-cli send -w testing123 --to t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg,1000.0
-TRANSACTION RECIPIENTS
-Address                                                 Amount           Additional data
-t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  1000.000000 MEL  ""
-t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  0.499803 MEL     ""
-t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  0.499804 MEL     ""
- (network fees)                                         0.000393 MEL
-Proceed? [y/N] 
 
 ```
+$ melwallet-cli send -w testing123 --to t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg,0.0001,MEL,68656c6c6f20776f726c64
+TRANSACTION RECIPIENTS
+Address                                                 Amount          Additional data
+t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  0.000100 MEL    "68656c6c6f20776f726c64"
+t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  124.999685 MEL  ""
+t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg  124.999686 MEL  ""
+ (network fees)                                         0.000254 MEL
+Proceed? [y/N] y
+Transaction hash:  818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed55f6
+(wait for confirmation with melwallet-cli wait-confirmation -w testing123 818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed55f6)
+```
+
+The `--to` flag of the send commnad might
+
 
 ## Advanced Uses
 

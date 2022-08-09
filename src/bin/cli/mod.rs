@@ -1,8 +1,9 @@
 
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use melwallet_client::{DaemonClient, WalletClient};
 
 use clap::{Parser, crate_version};
+use smol::io::split;
 use std::{net::SocketAddr, str::FromStr};
 use themelio_stf::{ PoolKey};
 use themelio_structs::{
@@ -40,7 +41,26 @@ impl FromStr for CoinDataWrapper {
             }
             &[dest, amount, denom, additional_data] => {
                 let dest: Address = dest.parse()?;
-                let additional_data: Vec<u8> = hex::decode(&additional_data)?;
+
+
+                let additional_data = {
+                    if !additional_data.contains('=') {
+                        anyhow::Ok(hex::decode(&additional_data)?)
+                    
+                    }
+                    else{
+                        let (data_type, content) = additional_data.split_once("=")
+                        .context("Unable to parse additional_data, acceptable fields: ascii=")?;
+
+                        if data_type == "ascii" {
+                            anyhow::Ok(content.as_bytes().into())
+                        }
+                        else {
+                            Err(anyhow::anyhow!("Unable to parse additional_data, acceptable fields: ascii="))
+                        }
+                    }
+
+                }?;
                 Ok(CoinDataWrapper(CoinData {
                     covhash: dest,
                     value: amount.parse()?,
@@ -78,7 +98,7 @@ impl CommonArgs {
 
 #[derive(Parser, Clone, Debug)]
 pub struct WalletArgs {
-    #[clap(short)]
+    #[clap(short, long)]
     /// Name of the wallet to create or use
     pub wallet: String,
 
