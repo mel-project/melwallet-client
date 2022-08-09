@@ -70,6 +70,7 @@ fn main() -> http_types::Result<()> {
         let args = Args::from_args();
         if let Args::GenerateAutocomplete = args {
             generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
+
         };
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs } => {
