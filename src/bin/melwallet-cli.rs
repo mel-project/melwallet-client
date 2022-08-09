@@ -3,7 +3,7 @@ use autoswap::do_autoswap;
 use colored::{Color, ColoredString, Colorize};
 use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
 
-use clap::{Parser, CommandFactory};
+use clap::{CommandFactory, Parser};
 use once_cell::sync::Lazy;
 use smol::process::Child;
 use std::collections::BTreeMap;
@@ -22,8 +22,8 @@ use tmelcrypt::Ed25519PK;
 mod autoswap;
 mod cli;
 
-use cli::{Args, CommonArgs, Cmd};
 use clap_complete::{generate, shells::Bash};
+use cli::{Args, CommonArgs};
 struct KillOnDrop(Option<Child>);
 
 impl Drop for KillOnDrop {
@@ -66,13 +66,12 @@ async fn wait_tx(wallet: &WalletClient, txhash: TxHash) -> http_types::Result<()
 fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
         let mut twriter = TabWriter::new(std::io::stderr());
-        let mut command = Cmd::command();
-        let args = Cmd::from_args();
-        if let Args::Complete = args{
-                generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
+        let mut command = Args::command();
+        let args = Args::from_args();
+        if let Args::GenerateAutocomplete = args {
+            generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
         };
         let command_output: (String, CommonArgs) = match args {
-
             Args::Create { wargs } => {
                 let dclient = wargs.common.dclient();
                 let pwd = enter_password_prompt().await?;
@@ -422,7 +421,7 @@ fn main() -> http_types::Result<()> {
                 writeln!(twriter)?;
                 (header_string, args)
             }
-            _ => return Ok(())
+            _ => return Ok(()),
         };
         twriter.flush()?;
 
