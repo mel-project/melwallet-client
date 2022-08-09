@@ -67,8 +67,9 @@ fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
         let mut twriter = TabWriter::new(std::io::stderr());
         let mut command = Cmd::command();
-        let args = Cmd::from_args();
-        if let Args::Complete = args{
+        let cmd =  Cmd::from_args();
+        let args = cmd.args;
+        if cmd.complete{
                 generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
         };
         let command_output: (String, CommonArgs) = match args {
