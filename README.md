@@ -4,7 +4,7 @@
 ![](https://img.shields.io/crates/l/melwallet-client)
 
 
-The defacto tool used to communicate with the Themelio wallet daemon, [`melwalletd`](https://github.com/themeliolabs/melwalletd). `melwallet-cli`  formats and send requests to the blockchain, prompting the user for when neccessary. This tool aims to offer the flexiblity of interacting directly with the `melwalletd` REST api with many additional benefits, including:
+The defacto tool used to communicate with the Themelio wallet daemon, [`melwalletd`](https://github.com/themeliolabs/melwalletd). `melwallet-cli`  formats and send requests to the blockchain, prompting the user for when necessary. This tool aims to offer the flexibility of interacting directly with the `melwalletd` REST api with many additional benefits, including:
 
 + useful help messages 
 + automatic response output formatting
@@ -19,7 +19,7 @@ The defacto tool used to communicate with the Themelio wallet daemon, [`melwalle
 cargo install --locked melwallet-cli melwalletd
 ```
 
-For a quick intro to using this software, checkout [this quick guide] on the themelio docs page(https://docs.themelio.org/try-themelio/my-first-tx/)
+For a quick intro to using this software, checkout [this quick guide] on the Themelio docs page(https://docs.themelio.org/try-themelio/my-first-tx/)
 
 
 
@@ -158,7 +158,7 @@ Transaction hash:  818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed5
 (wait for confirmation with melwallet-cli wait-confirmation -w testing123 818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed55f6)
 ```
 
-The `--to` flag of the send commnad might
+The `--to` flag of the send command might
 
 
 ## Advanced Uses

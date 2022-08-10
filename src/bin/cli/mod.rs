@@ -1,9 +1,8 @@
 
-use anyhow::{Context, anyhow};
+use anyhow::{Context};
 use melwallet_client::{DaemonClient, WalletClient};
 
 use clap::{Parser, crate_version};
-use smol::io::split;
 use std::{net::SocketAddr, str::FromStr};
 use themelio_stf::{ PoolKey};
 use themelio_structs::{
@@ -49,7 +48,7 @@ impl FromStr for CoinDataWrapper {
                     
                     }
                     else{
-                        let (data_type, content) = additional_data.split_once("=")
+                        let (data_type, content) = additional_data.split_once('=')
                         .context("Unable to parse additional_data, acceptable fields: ascii=")?;
 
                         if data_type == "ascii" {
@@ -166,7 +165,7 @@ pub enum Args {
         /// Second denomination
         b_denom: Denom,
     },
-    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/NOM-DOSC pairs
+    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
     Autoswap {
         #[clap(flatten)]
         wargs: WalletArgs,
@@ -235,7 +234,7 @@ pub enum Args {
         common: CommonArgs,
         #[clap(long)]
 
-        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/N-DOSC).
+        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
         pool: PoolKey,
     },
     /// Provide a secret key to import an existing wallet

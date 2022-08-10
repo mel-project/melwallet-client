@@ -1,7 +1,7 @@
 use anyhow::Context;
 use autoswap::do_autoswap;
 use colored::{Color, ColoredString, Colorize};
-use melwallet_client::{DaemonClient, WalletClient, WalletSummary};
+use melwallet_client::{WalletClient, WalletSummary};
 
 use clap::{CommandFactory, Parser};
 use once_cell::sync::Lazy;
@@ -10,13 +10,11 @@ use std::collections::BTreeMap;
 use std::io::{BufReader, Read, Stdin};
 use std::sync::Mutex;
 use std::{io::Write, time::Duration};
-use std::{net::SocketAddr, str::FromStr};
 use stdcode::StdcodeSerializeExt;
 use tabwriter::TabWriter;
 use themelio_stf::{melvm::Covenant, PoolKey};
 use themelio_structs::{
-    Address, CoinData, CoinID, CoinValue, Denom, NetID, StakeDoc, Transaction, TxHash, TxKind,
-    STAKE_EPOCH,
+    CoinData, CoinValue, Denom, NetID, StakeDoc, Transaction, TxHash, TxKind, STAKE_EPOCH,
 };
 use tmelcrypt::Ed25519PK;
 mod autoswap;
@@ -70,7 +68,6 @@ fn main() -> http_types::Result<()> {
         let args = Args::from_args();
         if let Args::GenerateAutocomplete = args {
             generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
-
         };
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs } => {
@@ -560,7 +557,7 @@ async fn proceed_prompt() -> anyhow::Result<()> {
         }
     })
     .await?;
-    if letter[0].to_ascii_lowercase() != b'y'  {
+    if letter[0].to_ascii_lowercase() != b'y' {
         anyhow::bail!("canceled");
     }
     Ok(())
