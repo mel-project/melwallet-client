@@ -109,7 +109,7 @@ Balance:      0.000000  MEL
 Staked:       0.000000  SYM
 ```
 
-As you can see here we used the `create` verb with the `-w` flag, short for `--wallet`, to create a wallet named `test_wallet`. This command outputs a formatted summary of the newly created wallet.
+As you can see here we used the `create` subcommand with the `-w` flag, short for `--wallet`, to create a wallet named `test_wallet`. This command outputs a formatted summary of the newly created wallet.
 
 
 ### `send-faucet` (testnet only)
@@ -120,7 +120,13 @@ Transaction hash:  c55cb04275fe0d6c618a51e04eb82b1a43487b499d8cca28d5d7ec2247f50
 (wait for confirmation with melwallet-cli wait-confirmation -w test_wallet c55cb04275fe0d6c618a51e04eb82b1a43487b499d8cca28d5d7ec2247f5047d)
 ```
 
-When needed, 1001 fake `MEL` can be collected from the network using the `send-faucet` verb. This verb outputs the transaction hash, along with another command using the `wait-confirmation` verb. If used, this command will cause the terminal to wait for a transaction to be accepted by the blockchain.
+When needed, 1001 fake `MEL` can be collected from the network using the `send-faucet` verb. This verb outputs the transaction hash, and a `melwallet-cli` command using the `wait-confirmation` verb. 
+
+```
+melwallet-cli wait-confirmation -w test_wallet c55cb04275fe0d6c618a51e04eb82b1a43487b499d8cca28d5d7ec2247f5047d
+```
+
+If used, this command will cause the terminal to wait for a transaction to be accepted by the Themelio blockchain.
 
 
 
@@ -135,7 +141,7 @@ Balance:      1001.000000  MEL
 Staked:       0.000000     SYM
 ```
 
-This command outputs a wallet summary for the wallet name specified by `-w`, `test_wallet`, consisting of the `network` this wallet belongs to, the `address` associated with this wallet, the `balance` (which contains `MEL` from a `send-faucet` transaction), and the amount of `SYM` staked on the network; identical to the summary produced by the [`create`](#create) verb
+This command outputs a wallet summary for the wallet name specified by `-w`, `test_wallet`, consisting of the `network` this wallet belongs to, the `address` associated with this wallet, the `balance` (which contains `MEL` from a `send-faucet` transaction), and the amount of `SYM` staked on the network; identical to the summary produced by the verb, [`create`](#create)
 
 ### `send`
 
