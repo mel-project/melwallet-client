@@ -158,7 +158,30 @@ Transaction hash:  818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed5
 (wait for confirmation with melwallet-cli wait-confirmation -w testing123 818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed55f6)
 ```
 
-The `--to` flag of the send command might
+The `--to` flag of the send command has four comma-delimitted fields; from the help doc:
+```
+FORMAT: "destination,amount[,denom[,additional_data]]"
+```
+
++ `desination`: the wallet address to send funds
++ `amount`: A number requiring a decimal and numbers to either side of it; ex: 1.0, 0.01
++ `denom`: the type (denomination) of coin being sent; the native options are MEL,SYM, and ERG
++ `additional_data`: hex or ascii encoded data included in the transaction
+
+In the above example the `additional_data` field, `68656c6c6f20776f726c64`, is the hex encoding of `hello world`. `melwallet-cli` is capable of encoding ascii strings as hex automatcally using `ascii=` like this
+```
+
+```
+ Use `send --help` for 
+
+```
+FORMAT: "destination,amount[,denom[,additional_data]]"
+```
+
+
+```
+melwallet-cli send --help
+```
 
 
 ## Advanced Uses

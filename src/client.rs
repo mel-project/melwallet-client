@@ -36,9 +36,12 @@ impl DaemonClient {
     /// Dump a wallet.
     pub async fn summarize_wallet(&self, name: &str) -> Result<Option<WalletSummary>, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", name)).await?;
+        println!("maybe the resp is a walelt");
         if resp.status() == StatusCode::NotFound {
+            println!("it wasn't");
             return Ok(None);
         }
+        
         Ok(Some(resp.body_json().await?))
     }
 
@@ -51,6 +54,7 @@ impl DaemonClient {
                 wallet_name: name.to_string(),
             }))
         } else {
+            println!("no wallet");
             Ok(None)
         }
     }
@@ -358,31 +362,25 @@ impl WalletClient {
     }
 }
 
-static AUTH_TOKEN: once_cell::sync::Lazy<Option<String>> =
-    once_cell::sync::Lazy::new(|| std::env::var("MELWALLETD_AUTH_TOKEN").ok());
 
 async fn http_get(endpoint: SocketAddr, path: &str) -> http_types::Result<Response> {
     let conn = TcpStream::connect(endpoint).await?;
-    let mut req = Request::new(
+    let mutreq = Request::new(
         Method::Get,
         Url::parse(&format!("http://{}/{}", endpoint, path))?,
     );
-    if let Some(token) = AUTH_TOKEN.as_ref() {
-        req.insert_header("X-Melwalletd-Auth-Token", token);
-    }
+    println!("{req:?} \n {}", req.body_string().await?);
     async_h1::connect(conn, req).await
 }
 
 #[allow(dead_code)]
 async fn http_put(endpoint: SocketAddr, path: &str) -> http_types::Result<Response> {
     let conn = TcpStream::connect(endpoint).await?;
-    let mut req = Request::new(
+    let req = Request::new(
         Method::Put,
         Url::parse(&format!("http://{}/{}", endpoint, path))?,
     );
-    if let Some(token) = AUTH_TOKEN.as_ref() {
-        req.insert_header("X-Melwalletd-Auth-Token", token);
-    }
+
     async_h1::connect(conn, req).await
 }
 
@@ -397,9 +395,7 @@ async fn http_with_body(
         Url::parse(&format!("http://{}/{}", endpoint, path))?,
     );
     req.set_body(body);
-    if let Some(token) = AUTH_TOKEN.as_ref() {
-        req.insert_header("X-Melwalletd-Auth-Token", token);
-    }
+
     let conn = TcpStream::connect(endpoint).await?;
     async_h1::connect(conn, req).await
 }

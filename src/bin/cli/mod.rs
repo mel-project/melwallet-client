@@ -3,6 +3,7 @@ use anyhow::{Context};
 use melwallet_client::{DaemonClient, WalletClient};
 
 use clap::{Parser, crate_version};
+use terminal_size::{Width, terminal_size};
 use std::{net::SocketAddr, str::FromStr};
 use themelio_stf::{ PoolKey};
 use themelio_structs::{
@@ -81,23 +82,24 @@ impl FromStr for CoinDataWrapper {
     propagate_version(true)
 )]
 pub struct CommonArgs {
-    #[clap(long, default_value = "127.0.0.1:11773")]
+    #[clap(display_order(995),long, default_value = "127.0.0.1:11773")]
     /// HTTP endpoint of a running melwalletd instance
     pub endpoint: SocketAddr,
-    // raw json instead of human readable
-    #[clap(long)]
+    /// Outputs raw, unformatted json
+    #[clap(display_order(995),long)]
     pub raw: bool,
 }
 
 impl CommonArgs {
     pub fn dclient(&self) -> DaemonClient {
-        DaemonClient::new(self.endpoint)
+        let a = DaemonClient::new(self.endpoint);
+        a
     }
 }
 
 #[derive(Parser, Clone, Debug)]
 pub struct WalletArgs {
-    #[clap(short, long)]
+    #[clap(display_order(0), short, long)]
     /// Name of the wallet to create or use
     pub wallet: String,
 
@@ -106,37 +108,135 @@ pub struct WalletArgs {
 }
 
 impl WalletArgs {
-    pub async fn wallet(&self) -> http_types::Result<WalletClient> {
-        Ok(self
-            .common
-            .dclient()
-            .get_wallet(&self.wallet)
-            .await?
-            .context("no such wallet")?)
+        pub async fn wallet(&self) -> http_types::Result<WalletClient> {
+        let maybe_wallet = self
+        .common
+        .dclient()
+        .get_wallet(&self.wallet)
+        .await?;
+        
+        match maybe_wallet {
+            Some(wallet) => Ok(wallet),
+            None => todo!()
+        }
     }
+    
 }
 
 
 #[derive(Parser, Clone, Debug)]
+#[clap(
+    max_term_width(400),
+    term_width(
+        if let Some((Width(w), _)) = terminal_size(){
+            w as usize
+        }
+        else{120}
+    ),
+    version(crate_version!()),
+    propagate_version(true),
+    
+)]
+/// Themelio Commandline Wallet
+
 pub enum Args {
-    /// Create a wallet
+    /// Create a wallet.  Ex: `melwallet-cli create -w wallet123`
+    #[clap[display_order(1)]]
     Create {
         #[clap(flatten)]
         wargs: WalletArgs,
     },
     /// List all available wallets
+    #[clap[display_order(1)]]
     List(CommonArgs),
+    /// Unlocks a wallet. Ex: `melwallet-cli list -w wallet123`
+    #[clap[display_order(3)]]
+    Unlock {
+        #[clap(flatten)]
+        wargs: WalletArgs,
+    },
     /// Send a 1000 MEL faucet transaction for a testnet wallet
+    #[clap[display_order(4)]]
     SendFaucet(WalletArgs),
     /// Details of a wallet
+    #[clap[display_order(5)]]
     Summary(WalletArgs),
+    /// Locks a wallet down again.
+    #[clap[display_order(6)]]
+    Lock {
+        #[clap(flatten)]
+        wargs: WalletArgs,
+    },
+    /// Send a transaction to the network
+    #[clap[display_order(8)]]
+    Send {
+        #[clap(flatten)]
+        wargs: WalletArgs,
+        /// FORMAT: "destination,amount[,denom[,additional_data]]"
+        /// Specifies where to send funds; denom and additional_data are optional.
+        /// For example, "--to $ADDRESS,100.0" sends 100 MEL to $ADDRESS. 
+        /// Amounts must be specified with numbers on either side of the decimal. Ex: 10.0, 0.1
+        /// Can be specified multiple times to send money to multiple addresses.
+        /// ‎
+        #[clap(display_order(1),long, verbatim_doc_comment)]
+        to: Vec<CoinDataWrapper>,
+        /// Force the selection of a coin
+        #[clap(display_order(990),long)]
+        force_spend: Vec<CoinID>,
+        /// Additional covenants. This often must be specified if we are spending coins that belong to other addresses, like covenant coins.
+        #[clap(display_order(990),long)]
+        add_covenant: Vec<String>,
+        /// Dumps the transaction as a hex string.
+        #[clap(display_order(990),long)]
+        dry_run: bool,
+        /// "Ballast" to add to the fee; 50 is plenty for an extra ed25519 signature added manually later.
+        #[clap(display_order(990),long, default_value = "0")]
+        fee_ballast: usize,
+    },
     /// Wait for a particular transaction to confirm
+    #[clap[display_order(8)]]
     WaitConfirmation {
         #[clap(flatten)]
         wargs: WalletArgs,
         txhash: HashVal,
     },
+    /// Sends a raw transaction in hex, with no customization options.
+    #[clap[display_order(9)]]
+    SendRaw {
+        #[clap(flatten)]
+        wargs: WalletArgs,
+        txhex: String,
+    },
+    /// Exports the secret key of a wallet. Will read password from stdin.
+    #[clap[display_order(10)]]
+    ExportSk {
+        #[clap(flatten)]
+        wargs: WalletArgs,
+    },
+    /// Provide a secret key to import an existing wallet
+    /// ‎
+    #[clap[display_order(11),verbatim_doc_comment]]
+    Import {
+        #[clap(flatten)]
+        wargs: WalletArgs,
+
+        #[clap(long, short)]
+        /// The secret key of the wallet used to import
+        secret: String,
+    },
+
+    /// Checks a pool. 
+    #[clap[display_order(12),verbatim_doc_comment]]
+    Pool {
+        #[clap(flatten)]
+        common: CommonArgs,
+        #[clap(long)]
+
+        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
+        pool: PoolKey,
+    },
     /// Swaps money from one denomination to another
+    #[clap[display_order(13)]]
     Swap {
         #[clap(flatten)]
         wargs: WalletArgs,
@@ -153,6 +253,7 @@ pub enum Args {
         wait: bool,
     },
     /// Supplies liquidity to Melswap
+    #[clap[display_order(21)]]
     LiqDeposit {
         #[clap(flatten)]
         wargs: WalletArgs,
@@ -166,13 +267,16 @@ pub enum Args {
         b_denom: Denom,
     },
     /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
+    #[clap[display_order(22)]]
     Autoswap {
         #[clap(flatten)]
         wargs: WalletArgs,
         /// How much money to swap
         value: u128,
     },
-    /// Stakes a certain number of syms.
+    /// Stakes a certain number of syms
+    /// ‎
+    #[clap[display_order(23), verbatim_doc_comment]]
     Stake {
         #[clap(flatten)]
         wargs: WalletArgs,
@@ -187,70 +291,13 @@ pub enum Args {
         #[clap(long)]
         duration: Option<u64>,
     },
-    /// Send a transaction to the network
-    Send {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        #[clap(long)]
-        /// A string specifying who to send money to, in the format "dest,amount[,denom[,additional_data]]". For example, --to $ADDRESS,1 sends 1 µMEL to $ADDRESS. Can be specified multiple times to send money to multiple addresses.
-        to: Vec<CoinDataWrapper>,
-        /// Force the selection of a coin
-        #[clap(long)]
-        force_spend: Vec<CoinID>,
-        /// Additional covenants. This often must be specified if we are spending coins that belong to other addresses, like covenant coins.
-        #[clap(long)]
-        add_covenant: Vec<String>,
-        /// Dry run; dumps out the transaction to send as a hex string.
-        #[clap(long)]
-        dry_run: bool,
-        /// "Ballast" to add to the fee; 50 is plenty for an extra ed25519 signature added manually later.
-        #[clap(long, default_value = "0")]
-        fee_ballast: usize,
-    },
-    /// Sends a raw transaction in hex, with no customization options.
-    SendRaw {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        txhex: String,
-    },
-    /// Unlocks a wallet. Will read password from stdin.
-    Unlock {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-    },
-    /// Exports the secret key of a wallet. Will read password from stdin.
-    ExportSk {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-    },
-    /// Locks a wallet down again.
-    Lock {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-    },
-    /// Checks a pool.
-    Pool {
-        #[clap(flatten)]
-        common: CommonArgs,
-        #[clap(long)]
-
-        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
-        pool: PoolKey,
-    },
-    /// Provide a secret key to import an existing wallet
-    Import {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-
-        #[clap(long, short)]
-        /// The secret key of the wallet used to import
-        secret: String,
-    },
-
     /// Show the summary of the network connected to the associated melwalletd instance
+    #[clap[display_order(24)]]
     NetworkSummary(CommonArgs),
+
     
     /// Generate bash autocompletions
+    #[clap[display_order(998), verbatim_doc_comment]]
     GenerateAutocomplete,
 }
 

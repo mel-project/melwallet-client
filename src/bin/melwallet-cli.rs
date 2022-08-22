@@ -18,7 +18,7 @@ use themelio_structs::{
 };
 use tmelcrypt::Ed25519PK;
 mod autoswap;
-mod cli;
+mod cli; 
 
 use clap_complete::{generate, shells::Bash};
 use cli::{Args, CommonArgs};
@@ -118,8 +118,11 @@ fn main() -> http_types::Result<()> {
                 dry_run,
                 fee_ballast,
             } => {
+                println!("het");
                 let wallet = wargs.wallet().await?;
+                println!("het");
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
+                println!("het2");
                 let tx = wallet
                     .prepare_transaction(
                         TxKind::Normal,
@@ -443,11 +446,11 @@ async fn prompt_password(prompt: &str) -> anyhow::Result<String> {
 }
 
 async fn enter_password_prompt() -> anyhow::Result<String> {
-    prompt_password("Enter Password").await
+    prompt_password("Enter Password: ").await
 }
 
 async fn prompt_password_with_confirmation() -> anyhow::Result<String> {
-    let pwd1 = prompt_password("Enter Password").await?;
+    let pwd1 = prompt_password("Enter Password: ").await?;
     let pwd2 = prompt_password("Confirm password: ").await?;
     match pwd1 == pwd2 {
         true => Ok(pwd1),
