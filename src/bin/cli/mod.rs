@@ -109,16 +109,12 @@ pub struct WalletArgs {
 
 impl WalletArgs {
         pub async fn wallet(&self) -> http_types::Result<WalletClient> {
-        let maybe_wallet = self
+        Ok(self
         .common
         .dclient()
         .get_wallet(&self.wallet)
-        .await?;
-        
-        match maybe_wallet {
-            Some(wallet) => Ok(wallet),
-            None => todo!()
-        }
+        .await?
+        .context(format!("Could not find wallet with name: {}",&self.wallet))?)
     }
     
 }

@@ -365,11 +365,10 @@ impl WalletClient {
 
 async fn http_get(endpoint: SocketAddr, path: &str) -> http_types::Result<Response> {
     let conn = TcpStream::connect(endpoint).await?;
-    let mutreq = Request::new(
+    let mut req = Request::new(
         Method::Get,
         Url::parse(&format!("http://{}/{}", endpoint, path))?,
     );
-    println!("{req:?} \n {}", req.body_string().await?);
     async_h1::connect(conn, req).await
 }
 

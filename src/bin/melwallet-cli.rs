@@ -72,7 +72,7 @@ fn main() -> http_types::Result<()> {
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs } => {
                 let dclient = wargs.common.dclient();
-                let pwd = enter_password_prompt().await?;
+                let pwd = prompt_password_with_confirmation().await?;
                 dclient
                     .create_wallet(&wargs.wallet, Some(pwd), None)
                     .await?;
@@ -436,9 +436,8 @@ fn main() -> http_types::Result<()> {
 
 async fn prompt_password(prompt: &str) -> anyhow::Result<String> {
     eprint!("{prompt}");
-    let pwd = smol::unblock(|| match STDIN_BUFFER.lock().as_deref_mut() {
-        Ok(buffer) => anyhow::Ok(rpassword::read_password_from_bufread(buffer).unwrap()),
-        Err(_) => Err(anyhow::anyhow!("unknown buffer unlock problem")),
+    let pwd = smol::unblock(|| {
+        rpassword::read_password()
     })
     .await?;
 
