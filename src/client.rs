@@ -36,9 +36,7 @@ impl DaemonClient {
     /// Dump a wallet.
     pub async fn summarize_wallet(&self, name: &str) -> Result<Option<WalletSummary>, DaemonError> {
         let mut resp = http_get(self.endpoint, &format!("wallets/{}", name)).await?;
-        println!("maybe the resp is a walelt");
         if resp.status() == StatusCode::NotFound {
-            println!("it wasn't");
             return Ok(None);
         }
         
@@ -54,7 +52,6 @@ impl DaemonClient {
                 wallet_name: name.to_string(),
             }))
         } else {
-            println!("no wallet");
             Ok(None)
         }
     }
@@ -87,17 +84,15 @@ impl DaemonClient {
 
     /// Obtains pool info.
     pub async fn get_pool(&self, pool: PoolKey) -> Result<PoolState, DaemonError> {
-        let network = self.get_summary().await?.network;
         Ok(successful(
             http_get(
                 self.endpoint,
                 &format!(
-                    "pools/{},{:?}",
+                    "pools/{}",
                     pool.to_canonical()
                         .expect("daemon returned uncanonicalizable pool")
                         .to_string()
                         .replace('/', ":"),
-                    network
                 ),
             )
             .await?,
