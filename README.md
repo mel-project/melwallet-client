@@ -3,8 +3,8 @@
 [![](https://img.shields.io/crates/v/melwallet-client)](https://crates.io/crates/melwallet-client)
 ![](https://img.shields.io/crates/l/melwallet-client)
 
-The de-facto tool used to communicate with the Themelio wallet daemon, [`melwalletd`](https://github.com/themeliolabs/melwalletd). `melwallet-cli` formats and send requests to the blockchain, prompting the user for when necessary. This tool aims to offer the flexibility of interacting directly with the `melwalletd` REST api with many additional benefits, including:
 
+The defacto tool used to communicate with the Themelio wallet daemon, [`melwalletd`](https://github.com/themeliolabs/melwalletd). `melwallet-cli`  formats and send requests to the blockchain, prompting the user for when necessary. This tool aims to offer the flexibility of interacting directly with the `melwalletd` REST api with many additional benefits, including:
 
 + useful help messages 
 + automatic response output formatting
@@ -63,7 +63,7 @@ SUBCOMMANDS:
 
 ```
 
-As described above, all the functionality of the melwallet-cli/melwalletd combo are available through the use of subcommands. Taking a look inside one of the subcommands you'll see even more helpful messages
+As described above, all the `melwalletd` endpoints are available through the use of subcommands. Taking a look inside one of the subcommands you'll see even more helpful messages 
 
 ```
 $ melwallet-cli send --help
@@ -96,21 +96,7 @@ We are working all the time to make these messages as helpful as possible, if yo
 
 ## Basic Uses
 
-As a thin-client of `melwalletd`, `melwallet-cli` needs access to an instance of `melwalletd`. The ["my first transaction" tutorial](https://docs.themelio.org/try-themelio/my-first-tx/) touches on running `melwalletd`, but in short, you can either
-
-- run a **mainnet** melwalletd instance, with local state stored in `~/.wallets`:
-  ```shell
-  $ melwalletd --wallet-dir ~/.wallets
-  ```
-- or run a **testnet** melwalletd instance:
-  ```shell
-  $ melwalletd --network testnet --wallet-dir ~/.wallets
-  ```
-
-Normally, you want to connect to the mainnet in order to access "real" MEL, SYM, covenants, etc. The main benefit of using the testnet instead is the availability of unlimited "play money" from the faucet functionality, which we will shortly cover.
-
-The rest of the documentation assumes `melwalletd` is running locally in the background.
-
+As a thin-client of `melwalletd`, `melwallet-cli` needs access to an instance of `melwalletd`. Learn how to run the wallet daemon on the docs page: https://docs.themelio.org/try-themelio/my-first-tx/. The rest of the documentation assumes `melwalletd` is running locally in the background.
 ### `create`
 
 ``` 
@@ -159,8 +145,6 @@ This command outputs a wallet summary for the wallet name specified by `-w`, `te
 
 ### `send`
 
-The following command sends 0.0001 MEL to `t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg`, with the coin-associated "additional data" of `68656c6c6f20776f726c64`.
-
 ```
 $ melwallet-cli send -w testing123 --to t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg,0.0001,MEL,68656c6c6f20776f726c64
 TRANSACTION RECIPIENTS
@@ -174,26 +158,31 @@ Transaction hash:  818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed5
 (wait for confirmation with melwallet-cli wait-confirmation -w testing123 818336401d0d1303d182aa83926f9d0fc288e12cdbf5d473327a255babed55f6)
 ```
 
-The `--to` flag of the send command might be a little confusing. It is at most four comma-separated values:
-
-- an **address** (covenant hash); in the example `t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg`
-- the **value** being sent, in this case `0.0001`
-- the **denomination** of what token is being sent, in this case `MEL`
-- the **additional data** attached to the coin that will contain the money being sent. Every coin/UTXO in Themelio has an additional data field that can be used as a covenant input, or just to attach arbitrary data to payments.
-
-The denomination and additional data are optional, but if only one is given it must be the denomination. For example,
-
+The `--to` flag of the send command has four comma-delimitted fields; from the help doc:
 ```
---to t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg,0.0001
+FORMAT: "destination,amount[,denom[,additional_data]]"
 ```
 
-means sending 0.0001 MEL to `t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg` with an **empty** additional data, while
++ `desination`: the wallet address to send funds
++ `amount`: A number requiring a decimal and numbers to either side of it; ex: 1.0, 0.01
++ `denom`: the type (denomination) of coin being sent; the native options are MEL,SYM, and ERG
++ `additional_data`: hex or ascii encoded data included in the transaction
+
+In the above example the `additional_data` field, `68656c6c6f20776f726c64`, is the hex encoding of `hello world`. `melwallet-cli` is capable of encoding ascii strings as hex automatcally using `ascii=` like this
+```
 
 ```
---to t22272fg9r0k8k09qj06drzzjq9e0rw3asxfs1zrnaccwv5j6gq5tg,0.0001,SYM
+ Use `send --help` for 
+
+```
+FORMAT: "destination,amount[,denom[,additional_data]]"
 ```
 
-means sending 0.0001 SYM to the same address, again with empty additional data.
+
+```
+melwallet-cli send --help
+```
+
 
 ## Advanced Uses
 
