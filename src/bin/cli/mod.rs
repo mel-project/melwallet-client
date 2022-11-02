@@ -145,7 +145,7 @@ pub enum Args {
     /// List all available wallets
     #[clap[display_order(1)]]
     List(CommonArgs),
-    /// Unlocks a wallet. Ex: `melwallet-cli list -w wallet123`
+    /// Unlocks a wallet. Ex: `melwallet-cli unlock -w wallet123`
     #[clap[display_order(3)]]
     Unlock {
         #[clap(flatten)]
@@ -157,7 +157,7 @@ pub enum Args {
     /// Details of a wallet
     #[clap[display_order(5)]]
     Summary(WalletArgs),
-    /// Locks a wallet down again.
+    /// Locks a wallet 
     #[clap[display_order(6)]]
     Lock {
         #[clap(flatten)]
