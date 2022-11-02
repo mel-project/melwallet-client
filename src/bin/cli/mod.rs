@@ -133,7 +133,7 @@ impl WalletArgs {
     propagate_version(true),
     
 )]
-/// Themelio Commandline Wallet
+/// Themelio Wallet Command Line Interface
 
 pub enum Args {
     /// Create a wallet.  Ex: `melwallet-cli create -w wallet123`
