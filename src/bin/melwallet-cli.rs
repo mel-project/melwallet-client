@@ -71,17 +71,13 @@ fn main() -> http_types::Result<()> {
         };
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs } => {
-                let dclient = wargs.common.dclient();
+                let rpc = wargs.common.rpc_client();
                 let pwd = enter_password_prompt().await?;
-                dclient
-                    .create_wallet(&wargs.wallet, Some(pwd), None)
-                    .await?;
-                let summary = dclient
-                    .list_wallets()
-                    .await?
-                    .get(&wargs.wallet)
-                    .cloned()
-                    .context("just-created wallet is now gone")?;
+                let wallet_name = wargs.wallet;
+                rpc.create_wallet(wallet_name, pwd, None).await?;
+                let summary = rpc.wallet_summary(wallet_name)
+                    .await
+                    .context("just-created wallet is now gone")??;
 
                 write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
                 writeln!(twriter)?;
@@ -211,7 +207,8 @@ fn main() -> http_types::Result<()> {
                 (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
             Args::WaitConfirmation { wargs, txhash } => {
-                wait_tx(&wargs.wallet().await?, TxHash(txhash)).await?;
+                let wallet = &wargs.wallet().await?;
+                wait_tx(&wallet, TxHash(txhash)).await?;
                 (serde_json::to_string_pretty(&txhash)?, wargs.common)
             }
             Args::Unlock { wargs } => {

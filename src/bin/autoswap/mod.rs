@@ -2,34 +2,35 @@ use std::time::Duration;
 
 use crate::wait_tx;
 use colored::Colorize;
-use melwallet_client::{DaemonClient, WalletClient};
+use melwallet_client::{DaemonClient};
+use melwalletd_prot::MelwalletdClient;
 use themelio_stf::PoolKey;
 use themelio_structs::{CoinData, CoinValue, Denom, Transaction, TxKind};
 
 /// Execute arbitrage
-pub async fn do_autoswap(daemon: DaemonClient, wallet: WalletClient, value: CoinValue) {
+pub async fn do_autoswap(daemon: MelwalletdClient<DaemonClient>, wallet_name: &str, value: CoinValue) {
     loop {
-        if let Err(err) = do_autoswap_once(&daemon, &wallet, value).await {
+        if let Err(err) = do_autoswap_once(&daemon, &wallet_name , value).await {
             eprintln!("cannot autoswap: {}", err.to_string().red())
         }
     }
 }
 
 async fn do_autoswap_once(
-    daemon: &DaemonClient,
-    wallet: &WalletClient,
+    daemon: &MelwalletdClient<DaemonClient>,
+    wallet_name: &str,
     value: CoinValue,
 ) -> http_types::Result<()> {
     // first, we get the relevant pool states
     let ms_state = daemon
-        .get_pool(PoolKey::new(Denom::Mel, Denom::Sym))
-        .await?;
+        .melswap_info(PoolKey::new(Denom::Mel, Denom::Sym))
+        .await??;
     let dm_state = daemon
-        .get_pool(PoolKey::new(Denom::Mel, Denom::Erg))
-        .await?;
+        .melswap_info(PoolKey::new(Denom::Mel, Denom::Erg))
+        .await??;
     let ds_state = daemon
-        .get_pool(PoolKey::new(Denom::Sym, Denom::Erg))
-        .await?;
+        .melswap_info(PoolKey::new(Denom::Sym, Denom::Erg))
+        .await??;
     // either m->s->d->m or m->d->s->m. these are the only two paths
     let msdm_payoff = {
         let syms = ms_state.clone().swap_many(value.0, 0).1;

@@ -3,6 +3,8 @@ use anyhow::{Context};
 use melwallet_client::{DaemonClient, WalletClient};
 
 use clap::{Parser, crate_version};
+use melwalletd_prot::MelwalletdClient;
+use nanorpc::RpcTransport;
 use std::{net::SocketAddr, str::FromStr};
 use themelio_stf::{ PoolKey};
 use themelio_structs::{
@@ -93,6 +95,9 @@ impl CommonArgs {
     pub fn dclient(&self) -> DaemonClient {
         DaemonClient::new(self.endpoint)
     }
+    pub fn rpc_client(&self) -> MelwalletdClient<DaemonClient> {
+        MelwalletdClient(self.dclient())
+    }
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -109,7 +114,7 @@ impl WalletArgs {
     pub async fn wallet(&self) -> http_types::Result<WalletClient> {
         Ok(self
             .common
-            .dclient()
+            .rpc_client()
             .get_wallet(&self.wallet)
             .await?
             .context("no such wallet")?)
