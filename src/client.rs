@@ -3,7 +3,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use http_types::{Body, Method, Request, Response, Url};
+use http_types::{Method, Request, Response, Url};
 use nanorpc::{RpcTransport, JrpcRequest, JrpcResponse};
 use smol::net::TcpStream;
 
