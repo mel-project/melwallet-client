@@ -1,13 +1,13 @@
 
 use anyhow::{Context};
-use melwallet_client::{DaemonClient, WalletClient};
+use melwallet_client::{DaemonClient};
 
 use clap::{Parser, crate_version};
 use terminal_size::{Width, terminal_size};
+use melwalletd_prot::{MelwalletdClient, types::WalletSummary};
 use std::{net::SocketAddr, str::FromStr};
-use themelio_stf::{ PoolKey};
 use themelio_structs::{
-    Address, CoinData, CoinID, CoinValue, Denom};
+    Address, CoinData, CoinID, CoinValue, Denom, PoolKey};
 use tmelcrypt::{HashVal};
 
 
@@ -45,7 +45,7 @@ impl FromStr for CoinDataWrapper {
 
                 let additional_data = {
                     if !additional_data.contains('=') {
-                        anyhow::Ok(hex::decode(&additional_data)?)
+                        anyhow::Ok(hex::decode(additional_data)?)
                     
                     }
                     else{
@@ -91,9 +91,8 @@ pub struct CommonArgs {
 }
 
 impl CommonArgs {
-    pub fn dclient(&self) -> DaemonClient {
-        let a = DaemonClient::new(self.endpoint);
-        a
+    pub fn rpc_client(&self) -> MelwalletdClient<DaemonClient> {
+        MelwalletdClient(DaemonClient::new(self.endpoint))
     }
 }
 
@@ -108,13 +107,13 @@ pub struct WalletArgs {
 }
 
 impl WalletArgs {
-        pub async fn wallet(&self) -> http_types::Result<WalletClient> {
+    pub async fn wallet(&self) -> http_types::Result<WalletSummary> {
         Ok(self
-        .common
-        .dclient()
-        .get_wallet(&self.wallet)
-        .await?
-        .context(format!("Could not find wallet with name: {}",&self.wallet))?)
+            .common
+            .rpc_client()
+            .wallet_summary(self.wallet.clone())
+            .await??
+        )
     }
     
 }
