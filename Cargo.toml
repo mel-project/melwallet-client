@@ -9,6 +9,12 @@ license = "MPL-2.0"
 repository = "https://github.com/themeliolabs/melwallet-client"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[patch.crates-io]
+# themelio-nodeprot={path="../themelio-nodeprot"}
+melwalletd-prot={path="../melwalletd-prot"}
+themelio-structs={path="../themelio-structs"}
+
+
 [dependencies]
 # tmelcrypt = { git = "https://github.com/themeliolabs/themelio-core" }
 tmelcrypt= "0.2.4"

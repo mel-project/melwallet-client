@@ -1,14 +1,12 @@
 
 use anyhow::{Context};
-use melwallet_client::{DaemonClient, WalletClient};
+use melwallet_client::{DaemonClient};
 
 use clap::{Parser, crate_version};
-use melwalletd_prot::MelwalletdClient;
-use nanorpc::RpcTransport;
+use melwalletd_prot::{MelwalletdClient, types::WalletSummary};
 use std::{net::SocketAddr, str::FromStr};
-use themelio_stf::{ PoolKey};
 use themelio_structs::{
-    Address, CoinData, CoinID, CoinValue, Denom};
+    Address, CoinData, CoinID, CoinValue, Denom, PoolKey};
 use tmelcrypt::{HashVal};
 
 
@@ -111,13 +109,13 @@ pub struct WalletArgs {
 }
 
 impl WalletArgs {
-    pub async fn wallet(&self) -> http_types::Result<WalletClient> {
+    pub async fn wallet(&self) -> http_types::Result<WalletSummary> {
         Ok(self
             .common
             .rpc_client()
-            .get_wallet(&self.wallet)
-            .await?
-            .context("no such wallet")?)
+            .wallet_summary(self.wallet.clone())
+            .await??
+        )
     }
 }
 
