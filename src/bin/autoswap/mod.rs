@@ -17,7 +17,7 @@ pub async fn do_autoswap(
     value: CoinValue,
 ) {
     loop {
-        if let Err(err) = do_autoswap_once(&daemon, &wallet_name, value).await {
+        if let Err(err) = do_autoswap_once(&daemon, wallet_name, value).await {
             eprintln!("cannot autoswap: {}", err.to_string().red())
         }
     }

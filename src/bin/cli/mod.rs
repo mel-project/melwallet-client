@@ -44,7 +44,7 @@ impl FromStr for CoinDataWrapper {
 
                 let additional_data = {
                     if !additional_data.contains('=') {
-                        anyhow::Ok(hex::decode(&additional_data)?)
+                        anyhow::Ok(hex::decode(additional_data)?)
                     
                     }
                     else{

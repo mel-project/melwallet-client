@@ -4,21 +4,21 @@ use colored::{Color, ColoredString, Colorize};
 use melwallet_client::DaemonClient;
 
 use clap::{CommandFactory, Parser};
-use core::fmt;
+
 use melwalletd_prot::types::{PrepareTxArgs, WalletSummary};
 use melwalletd_prot::MelwalletdClient;
 use once_cell::sync::Lazy;
 use smol::process::Child;
 use std::collections::BTreeMap;
 use std::io::{BufReader, Read, Stdin};
-use std::iter::FromIterator;
+
 use std::sync::Mutex;
 use std::{io::Write, time::Duration};
 use stdcode::{SerializeAsString, StdcodeSerializeExt};
 use tabwriter::TabWriter;
 use themelio_stf::melvm::Covenant;
 use themelio_structs::{
-    CoinData, CoinValue, Denom, NetID, PoolKey, StakeDoc, Transaction, TxHash, TxKind, STAKE_EPOCH,
+    CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxHash, TxKind, STAKE_EPOCH,
 };
 use tmelcrypt::Ed25519PK;
 mod autoswap;
@@ -48,10 +48,7 @@ async fn wait_tx(
         let status = daemon
             .tx_status(wallet_name.into(), txhash.into())
             .await??
-            .context(format!(
-                "Unable to find transaction: {}",
-                txhash.to_string()
-            ))?;
+            .context(format!("Unable to find transaction: {}", txhash))?;
         if let Some(height) = status.confirmed_height {
             let summary = daemon.wallet_summary(wallet_name.into()).await??;
             eprintln!("Confirmed at height {}", height);
@@ -87,9 +84,9 @@ fn main() -> http_types::Result<()> {
         let command_output: (String, CommonArgs) = match args {
             Args::Create { wargs } => {
                 let rpc = wargs.common.rpc_client();
-                let pwd = enter_password_prompt().await?;
+                let pwd = prompt_password_with_confirmation().await?;
                 let wallet_name = wargs.wallet;
-                rpc.create_wallet(wallet_name.clone(), pwd, None).await?;
+                rpc.create_wallet(wallet_name.clone(), pwd, None).await??;
                 let summary = rpc
                     .wallet_summary(wallet_name.clone())
                     .await
@@ -107,18 +104,16 @@ fn main() -> http_types::Result<()> {
                 for wallet_name in wallets.clone() {
                     // let json_string = serde_json::to_string_pretty(&summary)?.to_owned();
                     // wallets_json +&&= &json_string;
-                    let summary = rpc_client
-                        .wallet_summary(wallet_name.clone().into())
-                        .await??;
+                    let summary = rpc_client.wallet_summary(wallet_name.clone()).await??;
                     write_wallet_summary(&mut twriter, &wallet_name, &summary)?;
                     writeln!(twriter)?;
                 }
                 (serde_json::to_string_pretty(&wallets)?, common)
             }
             Args::Summary(wargs) => {
-                let rpc_client = wargs.common.rpc_client();
+                let _rpc_client = wargs.common.rpc_client();
                 let summary = wargs.wallet().await?;
-                let summary = write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
+                write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
                 (serde_json::to_string_pretty(&summary)?, wargs.common)
             }
             Args::SendFaucet(wargs) => {
@@ -137,7 +132,7 @@ fn main() -> http_types::Result<()> {
                 fee_ballast,
             } => {
                 let rpc_client = wargs.common.rpc_client();
-                let wallet = wargs.wallet().await?;
+                let _wallet = wargs.wallet().await?;
                 let wallet_name = wargs.wallet;
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
                 let cov: Vec<Vec<u8>> = add_covenant
@@ -167,17 +162,17 @@ fn main() -> http_types::Result<()> {
             }
             Args::Stake {
                 wargs,
-                value,
+                value: _,
                 start,
                 duration,
                 staker_pubkey,
             } => {
-                let staker_pubkey = Ed25519PK::from_bytes(
+                let _staker_pubkey = Ed25519PK::from_bytes(
                     &hex::decode(&staker_pubkey).context("staker pubkey must be hex")?,
                 )
                 .context("staker pubkey must be 32 bytes")?;
                 let rpc_client = wargs.common.rpc_client();
-                let wallet = wargs.wallet().await?;
+                let _wallet = wargs.wallet().await?;
                 let last_header = rpc_client.latest_header().await??;
                 let next_epoch = last_header.height.epoch() + 1;
                 let start_epoch = start.unwrap_or_default().max(next_epoch);
@@ -244,14 +239,14 @@ fn main() -> http_types::Result<()> {
             Args::Unlock { wargs } => {
                 let rpc_client = wargs.common.rpc_client();
 
-                let wallet = wargs.wallet().await?;
+                let _wallet = wargs.wallet().await?;
                 let pwd = enter_password_prompt().await?;
-                rpc_client.unlock_wallet(wargs.wallet, pwd).await?;
+                rpc_client.unlock_wallet(wargs.wallet, pwd).await??;
                 ("".into(), wargs.common)
             }
             Args::ExportSk { wargs } => {
                 let rpc_client = wargs.common.rpc_client();
-                let wallet = wargs.wallet().await?;
+                let _wallet = wargs.wallet().await?;
                 let pwd = enter_password_prompt().await?;
                 let sk = rpc_client.export_sk(wargs.wallet, pwd).await??;
                 writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
@@ -307,11 +302,10 @@ fn main() -> http_types::Result<()> {
                 let wallet_summary = wargs.wallet().await?;
 
                 let from_denom = &SerializeAsString(from);
-                let max_value = wallet_summary
+                let max_value = *wallet_summary
                     .detailed_balance
                     .get(from_denom)
-                    .context(format!("No Coins of denom: {}", from_denom.0))?
-                    .clone();
+                    .context(format!("No Coins of denom: {}", from_denom.0))?;
                 let max_value = if from == Denom::Mel {
                     max_value / 2
                 } else {
@@ -343,7 +337,7 @@ fn main() -> http_types::Result<()> {
                     value.to_string().bold().bright_green(),
                     from
                 )?;
-                let dclient = wargs.common.dclient();
+                let _dclient = wargs.common.dclient();
                 let pool_state = rpc_client
                     .melswap_info(SerializeAsString(pool_key))
                     .await??
@@ -366,7 +360,7 @@ fn main() -> http_types::Result<()> {
                     .await??;
                 write_txhash(&mut twriter, &wargs.wallet, txhash)?;
                 if wait {
-                    wait_tx(&rpc_client, &wallet_name, txhash).await?
+                    wait_tx(&rpc_client, wallet_name, txhash).await?
                 }
                 (serde_json::to_string_pretty(&to_send)?, wargs.common)
             }
@@ -419,7 +413,7 @@ fn main() -> http_types::Result<()> {
                 let tx = rpc_client
                     .prepare_tx(wallet_name.into(), ptx_args)
                     .await??;
-                send_tx(&mut twriter, rpc_client, &wallet_name, tx.clone()).await?;
+                send_tx(&mut twriter, rpc_client, wallet_name, tx.clone()).await?;
                 (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
             Args::Import { wargs, secret } => {
@@ -429,7 +423,7 @@ fn main() -> http_types::Result<()> {
 
                 rpc_client
                     .create_wallet(wallet_name.to_owned(), pwd, Some(secret))
-                    .await?;
+                    .await??;
 
                 let summary = rpc_client.wallet_summary(wallet_name.to_owned()).await??;
 
@@ -445,7 +439,7 @@ fn main() -> http_types::Result<()> {
                     stdcode::deserialize(&hex::decode(&txhex).context("cannot decode hex")?)
                         .context("malformed transaction")?;
 
-                send_tx(&mut twriter, rpc_client, &wallet_name, tx.clone()).await?;
+                send_tx(&mut twriter, rpc_client, wallet_name, tx.clone()).await?;
                 (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
             Args::NetworkSummary(common) => {
@@ -599,7 +593,7 @@ async fn proceed_prompt() -> anyhow::Result<()> {
                 }
                 Ok(letter)
             }
-            Err(_) => return Err(anyhow::anyhow!("unknown buffer unlock problem")),
+            Err(_) => Err(anyhow::anyhow!("unknown buffer unlock problem")),
         }
     })
     .await?;
