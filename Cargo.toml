@@ -11,7 +11,7 @@ repository = "https://github.com/themeliolabs/melwallet-client"
 
 [patch.crates-io]
 # themelio-nodeprot={path="../themelio-nodeprot"}
-melwalletd-prot={path="../melwalletd-prot"}
+# melwalletd-prot={path="../melwalletd-prot"}
 
 
 [dependencies]
@@ -41,6 +41,6 @@ rpassword = "7.0.0"
 clap = { version = "3.2.16", features = ["derive", "cargo"] }
 clap_complete = "3.2.3"
 terminal_size = "0.2.1"
-melwalletd-prot = "0.2.0"
+melwalletd-prot = "0.3.0"
 nanorpc = "0.1.12"
 async-trait = "0.1.58"
