@@ -121,7 +121,7 @@ impl WalletArgs {
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
-    max_term_width(400),
+    max_term_width(50),
     term_width(
         if let Some((Width(w), _)) = terminal_size(){
             w as usize
@@ -150,28 +150,31 @@ pub enum Args {
         #[clap(flatten)]
         wargs: WalletArgs,
     },
-    /// Send a 1000 MEL faucet transaction for a testnet wallet
-    #[clap[display_order(4)]]
-    SendFaucet(WalletArgs),
-    /// Details of a wallet
-    #[clap[display_order(5)]]
-    Summary(WalletArgs),
     /// Locks a wallet 
-    #[clap[display_order(6)]]
+    #[clap[display_order(4)]]
     Lock {
         #[clap(flatten)]
         wargs: WalletArgs,
     },
+    /// Send a 1000 MEL faucet transaction for a testnet wallet
+    #[clap[display_order(5)]]
+    SendFaucet(WalletArgs),
+    /// Details of a wallet
+    #[clap[display_order(6)]]
+    Summary(WalletArgs),
+
     /// Send a transaction to the network
     #[clap[display_order(8)]]
     Send {
         #[clap(flatten)]
         wargs: WalletArgs,
-        /// FORMAT: "destination,amount[,denom[,additional_data]]"
+        /// FORMAT: `destination,amount[,denom[,additional_data]]`
         /// Specifies where to send funds; denom and additional_data are optional.
-        /// For example, "--to $ADDRESS,100.0" sends 100 MEL to $ADDRESS. 
+        /// For example, `--to $ADDRESS,100.0` sends 100 MEL to $ADDRESS. 
         /// Amounts must be specified with numbers on either side of the decimal. Ex: 10.0, 0.1
         /// Can be specified multiple times to send money to multiple addresses.
+        /// `denom` defaults to MEL
+        /// `additional_data` must be hex encoded by default, but allows passsing ascii with `ascii=""`
         /// ‎
         #[clap(display_order(1),long, verbatim_doc_comment)]
         to: Vec<CoinDataWrapper>,
@@ -188,29 +191,70 @@ pub enum Args {
         #[clap(display_order(990),long, default_value = "0")]
         fee_ballast: usize,
     },
+     /// Checks a pool. 
+     #[clap[display_order(9),verbatim_doc_comment]]
+     Pool {
+         #[clap(flatten)]
+         common: CommonArgs,
+         #[clap(long)]
+ 
+         /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
+         pool: PoolKey,
+     },
+     /// Swaps money from one denomination to another
+     #[clap[display_order(10)]]
+     Swap {
+         #[clap(flatten)]
+         wargs: WalletArgs,
+         /// How much money to swap
+         value: Option<CoinValue>,
+         #[clap(long, short)]
+         /// "From" denomination.
+         from: Denom,
+         #[clap(long, short)]
+         /// "To" denomination.
+         to: Denom,
+         /// Whether or not to wait.
+         #[clap(long)]
+         wait: bool,
+     },
+     /// Supplies liquidity to Melswap
+     #[clap[display_order(11)]]
+     LiqDeposit {
+         #[clap(flatten)]
+         wargs: WalletArgs,
+         /// Number of the first denomination to deposit (in millionths)
+         a_count: CoinValue,
+         /// First denomination
+         a_denom: Denom,
+         /// Number of the second denomination to deposit (in millionths)
+         b_count: CoinValue,
+         /// Second denomination
+         b_denom: Denom,
+     },
     /// Wait for a particular transaction to confirm
-    #[clap[display_order(8)]]
+    #[clap[display_order(12)]]
     WaitConfirmation {
         #[clap(flatten)]
         wargs: WalletArgs,
         txhash: HashVal,
     },
     /// Sends a raw transaction in hex, with no customization options.
-    #[clap[display_order(9)]]
+    #[clap[display_order(13)]]
     SendRaw {
         #[clap(flatten)]
         wargs: WalletArgs,
         txhex: String,
     },
     /// Exports the secret key of a wallet. Will read password from stdin.
-    #[clap[display_order(10)]]
+    #[clap[display_order(14)]]
     ExportSk {
         #[clap(flatten)]
         wargs: WalletArgs,
     },
     /// Provide a secret key to import an existing wallet
     /// ‎
-    #[clap[display_order(11),verbatim_doc_comment]]
+    #[clap[display_order(15),verbatim_doc_comment]]
     Import {
         #[clap(flatten)]
         wargs: WalletArgs,
@@ -220,47 +264,7 @@ pub enum Args {
         secret: String,
     },
 
-    /// Checks a pool. 
-    #[clap[display_order(12),verbatim_doc_comment]]
-    Pool {
-        #[clap(flatten)]
-        common: CommonArgs,
-        #[clap(long)]
-
-        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
-        pool: PoolKey,
-    },
-    /// Swaps money from one denomination to another
-    #[clap[display_order(13)]]
-    Swap {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        /// How much money to swap
-        value: Option<CoinValue>,
-        #[clap(long, short)]
-        /// "From" denomination.
-        from: Denom,
-        #[clap(long, short)]
-        /// "To" denomination.
-        to: Denom,
-        /// Whether or not to wait.
-        #[clap(long)]
-        wait: bool,
-    },
-    /// Supplies liquidity to Melswap
-    #[clap[display_order(21)]]
-    LiqDeposit {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        /// Number of the first denomination to deposit (in millionths)
-        a_count: CoinValue,
-        /// First denomination
-        a_denom: Denom,
-        /// Number of the second denomination to deposit (in millionths)
-        b_count: CoinValue,
-        /// Second denomination
-        b_denom: Denom,
-    },
+   
     /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
     #[clap[display_order(22)]]
     Autoswap {
