@@ -253,9 +253,8 @@ pub enum Args {
         wargs: WalletArgs,
     },
     /// Provide a secret key to import an existing wallet
-    /// ‎
     #[clap[display_order(15),verbatim_doc_comment]]
-    Import {
+    ImportSk {
         #[clap(flatten)]
         wargs: WalletArgs,
 
@@ -274,7 +273,6 @@ pub enum Args {
         value: u128,
     },
     /// Stakes a certain number of syms
-    /// ‎
     #[clap[display_order(23), verbatim_doc_comment]]
     Stake {
         #[clap(flatten)]

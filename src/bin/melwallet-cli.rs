@@ -55,9 +55,9 @@ async fn wait_tx(
             eprintln!(
                 "(in block explorer: https://{}/blocks/{}/{})",
                 if summary.network == NetID::Testnet {
-                    "scan-testnet.themelio.org"
+                    "testnet.melscan.io"
                 } else if summary.network == NetID::Mainnet {
-                    "scan.themelio.org"
+                    "melscan.io"
                 } else {
                     ""
                 },
@@ -413,7 +413,7 @@ fn main() -> http_types::Result<()> {
                 send_tx(&mut twriter, rpc_client, wallet_name, tx.clone()).await?;
                 (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
-            Args::Import { wargs, secret } => {
+            Args::ImportSk { wargs, secret } => {
                 let rpc_client = wargs.common.rpc_client();
                 let wallet_name = &wargs.wallet;
                 let pwd = enter_password_prompt().await?;
