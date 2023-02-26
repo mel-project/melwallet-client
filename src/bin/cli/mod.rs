@@ -6,7 +6,7 @@ use clap::{Parser, crate_version};
 use terminal_size::{Width, terminal_size};
 use melwalletd_prot::{MelwalletdClient, types::WalletSummary};
 use std::{net::SocketAddr, str::FromStr};
-use themelio_structs::{
+use melstructs::{
     Address, CoinData, CoinID, CoinValue, Denom, PoolKey};
 use tmelcrypt::{HashVal};
 
@@ -27,7 +27,7 @@ impl FromStr for CoinDataWrapper {
                     covhash: dest,
                     value: amount,
                     denom: Denom::Mel,
-                    additional_data: vec![],
+                    additional_data: vec![].into(),
                 }))
             }
             [dest, amount, denom] => {
@@ -36,7 +36,7 @@ impl FromStr for CoinDataWrapper {
                     covhash: dest,
                     value: amount.parse()?,
                     denom: denom.parse()?,
-                    additional_data: vec![],
+                    additional_data: vec![].into(),
                 }))
             }
             &[dest, amount, denom, additional_data] => {
@@ -65,7 +65,7 @@ impl FromStr for CoinDataWrapper {
                     covhash: dest,
                     value: amount.parse()?,
                     denom: denom.parse()?,
-                    additional_data,
+                    additional_data: additional_data.into(),
                 }))
             }
             _ => anyhow::bail!(

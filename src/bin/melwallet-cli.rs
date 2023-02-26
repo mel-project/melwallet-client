@@ -12,14 +12,14 @@ use smol::process::Child;
 use std::collections::BTreeMap;
 use std::io::{BufReader, Read, Stdin};
 
-use std::sync::Mutex;
-use std::{io::Write, time::Duration};
-use stdcode::{SerializeAsString, StdcodeSerializeExt};
-use tabwriter::TabWriter;
-use themelio_stf::melvm::Covenant;
-use themelio_structs::{
+use melstructs::{
     CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxHash, TxKind, STAKE_EPOCH,
 };
+
+use std::sync::Mutex;
+use std::{io::Write, time::Duration};
+use stdcode::StdcodeSerializeExt;
+use tabwriter::TabWriter;
 use tmelcrypt::Ed25519PK;
 mod autoswap;
 mod cli;
@@ -137,7 +137,7 @@ fn main() -> http_types::Result<()> {
                 let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
                 let cov: Vec<Vec<u8>> = add_covenant
                     .into_iter()
-                    .map(|s| Ok(Covenant(hex::decode(&s)?).0))
+                    .map(|s| Ok(hex::decode(&s)?))
                     .collect::<anyhow::Result<Vec<_>>>()?;
 
                 let ptx_args = PrepareTxArgs {
@@ -259,10 +259,9 @@ fn main() -> http_types::Result<()> {
                 ("".into(), wargs.common)
             }
             Args::Pool { common, pool } => {
-                let pool = pool.to_canonical().context("cannot canonicalize")?;
                 let rpc_client = common.rpc_client();
                 let pool_state = rpc_client
-                    .melswap_info(SerializeAsString(pool))
+                    .melswap_info(pool)
                     .await??
                     .context("Couldn't find pool")?;
                 let ratio = pool_state.lefts as f64 / pool_state.rights as f64;
@@ -270,17 +269,17 @@ fn main() -> http_types::Result<()> {
                     twriter,
                     "{} {}\t= {} {}",
                     "1".bold().bright_green(),
-                    pool.left.to_string().italic(),
+                    pool.left().to_string().italic(),
                     format!("{}", 1.0 / ratio).bold().yellow(),
-                    pool.right.to_string().italic()
+                    pool.right().to_string().italic()
                 )?;
                 writeln!(
                     twriter,
                     "{} {}\t= {} {}",
                     "1".bold().yellow(),
-                    pool.right.to_string().italic(),
+                    pool.right().to_string().italic(),
                     format!("{}", ratio).bold().bright_green(),
-                    pool.left.to_string().italic()
+                    pool.left().to_string().italic()
                 )?;
                 (serde_json::to_string_pretty(&pool_state)?, common)
             }
@@ -301,11 +300,10 @@ fn main() -> http_types::Result<()> {
                 let wallet_name = &wargs.wallet;
                 let wallet_summary = wargs.wallet().await?;
 
-                let from_denom = &SerializeAsString(from);
                 let max_value = *wallet_summary
                     .detailed_balance
-                    .get(from_denom)
-                    .context(format!("No Coins of denom: {}", from_denom.0))?;
+                    .get(&from.to_string())
+                    .context(format!("no coins of denom: {}", from))?;
                 let max_value = if from == Denom::Mel {
                     max_value / 2
                 } else {
@@ -319,11 +317,11 @@ fn main() -> http_types::Result<()> {
                     outputs: vec![CoinData {
                         value,
                         denom: from,
-                        additional_data: vec![],
+                        additional_data: vec![].into(),
                         covhash: wallet_summary.address,
                     }],
                     covenants: vec![],
-                    data: pool_key.to_bytes(),
+                    data: pool_key.to_bytes().into(),
                     nobalance: vec![],
                     fee_ballast: 0,
                 };
@@ -338,10 +336,10 @@ fn main() -> http_types::Result<()> {
                     from
                 )?;
                 let pool_state = rpc_client
-                    .melswap_info(SerializeAsString(pool_key))
+                    .melswap_info(pool_key)
                     .await??
                     .context(format!("could not find pool: {}", pool_key))?;
-                let to_value = if from == pool_key.right {
+                let to_value = if from == pool_key.right() {
                     pool_state.clone().swap_many(0, value.0).0
                 } else {
                     pool_state.clone().swap_many(value.0, 0).1
@@ -375,8 +373,8 @@ fn main() -> http_types::Result<()> {
                 let wallet_name = &wargs.wallet;
                 let covhash = wallet_summary.address;
                 let poolkey = PoolKey::new(a_denom, b_denom);
-                let left_denom = poolkey.left;
-                let right_denom = poolkey.right;
+                let left_denom = poolkey.left();
+                let right_denom = poolkey.right();
                 let left_count = if left_denom == a_denom {
                     a_count
                 } else {
@@ -395,17 +393,17 @@ fn main() -> http_types::Result<()> {
                             value: left_count,
                             denom: left_denom,
                             covhash,
-                            additional_data: vec![],
+                            additional_data: vec![].into(),
                         },
                         CoinData {
                             value: right_count,
                             denom: right_denom,
                             covhash,
-                            additional_data: vec![],
+                            additional_data: vec![].into(),
                         },
                     ],
                     covenants: vec![],
-                    data: poolkey.to_bytes(),
+                    data: poolkey.to_bytes().into(),
                     nobalance: vec![],
                     fee_ballast: 0,
                 };
@@ -477,7 +475,7 @@ fn main() -> http_types::Result<()> {
 
 async fn prompt_password(prompt: &str) -> anyhow::Result<String> {
     eprint!("{prompt}");
-    let pwd = smol::unblock(|| rpassword::read_password()).await?;
+    let pwd = smol::unblock(rpassword::read_password).await?;
 
     Ok(pwd.trim().to_string())
 }
@@ -554,7 +552,7 @@ fn write_wallet_summary(
     )?;
     writeln!(out, "Balance:\t{}\tMEL", summary.total_micromel)?;
     for (k, v) in summary.detailed_balance.iter() {
-        writeln!(out, "\t{}\t{}", v, k.0)?;
+        writeln!(out, "\t{}\t{}", v, k)?;
     }
     writeln!(out, "Staked:\t{}\tSYM", summary.staked_microsym)?;
     Ok(())

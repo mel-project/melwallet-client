@@ -3,12 +3,12 @@ use std::time::Duration;
 use crate::wait_tx;
 use anyhow::Context;
 use colored::Colorize;
+use melstructs::PoolKey;
+use melstructs::{CoinData, CoinValue, Denom, Transaction, TxKind};
 use melwallet_client::DaemonClient;
 use melwalletd_prot::types::PrepareTxArgs;
 use melwalletd_prot::MelwalletdClient;
-use stdcode::SerializeAsString;
-use themelio_structs::PoolKey;
-use themelio_structs::{CoinData, CoinValue, Denom, Transaction, TxKind};
+
 
 /// Execute arbitrage
 pub async fn do_autoswap(
@@ -30,15 +30,15 @@ async fn do_autoswap_once(
 ) -> http_types::Result<()> {
     // first, we get the relevant pool states
     let ms_state = daemon
-        .melswap_info(SerializeAsString(PoolKey::new(Denom::Mel, Denom::Sym)))
+        .melswap_info(PoolKey::new(Denom::Mel, Denom::Sym))
         .await??
         .unwrap();
     let dm_state = daemon
-        .melswap_info(SerializeAsString(PoolKey::new(Denom::Mel, Denom::Erg)))
+        .melswap_info(PoolKey::new(Denom::Mel, Denom::Erg))
         .await??
         .unwrap();
     let ds_state = daemon
-        .melswap_info(SerializeAsString(PoolKey::new(Denom::Sym, Denom::Erg)))
+        .melswap_info(PoolKey::new(Denom::Sym, Denom::Erg))
         .await??
         .unwrap();
     // either m->s->d->m or m->d->s->m. these are the only two paths
@@ -77,11 +77,10 @@ async fn execute_swap(
     to: Denom,
 ) -> http_types::Result<()> {
     let summary = daemon.wallet_summary(wallet_name.into()).await??;
-    let to_denom = SerializeAsString(to);
     let max_from_value = summary
         .detailed_balance
-        .get(&to_denom)
-        .context(format!("Couldn't find denom: {}", to_denom.0))?
+        .get(&to.to_string())
+        .context(format!("Couldn't find denom: {}", to))?
         .to_owned();
     let max_from_value = if from == Denom::Sym {
         max_from_value - summary.staked_microsym
@@ -111,11 +110,11 @@ async fn prepare_swap(
         outputs: vec![CoinData {
             value: from_value,
             denom: from,
-            additional_data: vec![],
+            additional_data: Default::default(),
             covhash: summary.address,
         }],
         covenants: vec![],
-        data: PoolKey::new(from, to).to_bytes(),
+        data: PoolKey::new(from, to).to_bytes().into(),
         nobalance: vec![],
         fee_ballast: 0,
     };
