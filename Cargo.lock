@@ -1400,7 +1400,7 @@ dependencies = [
 
 [[package]]
 name = "melwallet-client"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
