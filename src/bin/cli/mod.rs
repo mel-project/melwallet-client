@@ -175,7 +175,7 @@ pub enum Args {
         /// Can be specified multiple times to send money to multiple addresses.
         /// `denom` defaults to MEL
         /// `additional_data` must be hex encoded by default, but allows passsing ascii with `ascii=""`
-        /// ‎
+        /// 
         #[clap(display_order(1),long, verbatim_doc_comment)]
         to: Vec<CoinDataWrapper>,
         /// Force the selection of a coin
@@ -184,6 +184,9 @@ pub enum Args {
         /// Additional covenants. This often must be specified if we are spending coins that belong to other addresses, like covenant coins.
         #[clap(display_order(990),long)]
         add_covenant: Vec<String>,
+                /// The contents of the data field, in hexadecimal.
+                #[clap(long, default_value="")]
+                hex_data: String,
         /// Dumps the transaction as a hex string.
         #[clap(display_order(990),long)]
         dry_run: bool,

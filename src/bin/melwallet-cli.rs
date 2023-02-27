@@ -130,6 +130,7 @@ fn main() -> http_types::Result<()> {
                 add_covenant,
                 dry_run,
                 fee_ballast,
+                hex_data,
             } => {
                 let rpc_client = wargs.common.rpc_client();
                 let _wallet = wargs.wallet().await?;
@@ -145,7 +146,7 @@ fn main() -> http_types::Result<()> {
                     inputs: force_spend,
                     outputs: desired_outputs,
                     covenants: cov,
-                    data: vec![],
+                    data: hex::decode(&hex_data)?,
                     nobalance: vec![],
                     fee_ballast,
                 };
