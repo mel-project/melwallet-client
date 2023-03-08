@@ -9,7 +9,6 @@ use melwallet_client::DaemonClient;
 use melwalletd_prot::types::PrepareTxArgs;
 use melwalletd_prot::MelwalletdClient;
 
-
 /// Execute arbitrage
 pub async fn do_autoswap(
     daemon: MelwalletdClient<DaemonClient>,
@@ -79,7 +78,7 @@ async fn execute_swap(
     let summary = daemon.wallet_summary(wallet_name.into()).await??;
     let max_from_value = summary
         .detailed_balance
-        .get(&to.to_string())
+        .get(&from.to_string())
         .context(format!("Couldn't find denom: {}", to))?
         .to_owned();
     let max_from_value = if from == Denom::Sym {
