@@ -551,7 +551,8 @@ fn write_wallet_summary(
         "Address:\t{}",
         summary.address.to_string().bright_blue()
     )?;
-    writeln!(out, "Balance:\t{}\tMEL", summary.total_micromel)?;
+    writeln!(out, "MEL Balance:\t{}\tMEL", summary.total_micromel)?;
+    writeln!(out, "Detailed Balance:")?;
     for (k, v) in summary.detailed_balance.iter() {
         writeln!(out, "\t{}\t{}", v, k)?;
     }
