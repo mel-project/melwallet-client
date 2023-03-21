@@ -77,7 +77,7 @@ fn main() -> http_types::Result<()> {
     smolscale::block_on(async move {
         let mut twriter = TabWriter::new(std::io::stderr());
         let mut command = Args::command();
-        let args = Args::try_parse()?;
+        let args = Args::parse();
         if let Args::GenerateAutocomplete = args {
             generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
         };
