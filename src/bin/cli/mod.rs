@@ -1,11 +1,9 @@
 
 use anyhow::{Context};
-use melwallet_client::{DaemonClient};
 
 use clap::{Parser, crate_version};
 use terminal_size::{Width, terminal_size};
-use melwalletd_prot::{MelwalletdClient, types::WalletSummary};
-use std::{net::SocketAddr, str::FromStr};
+use std::str::FromStr;
 use melstructs::{
     Address, CoinData, CoinID, CoinValue, Denom, PoolKey};
 use tmelcrypt::{HashVal};
@@ -77,44 +75,21 @@ impl FromStr for CoinDataWrapper {
 
 
 #[derive(Parser, Clone, Debug)]
-#[clap(
-    version(crate_version!()),
-    propagate_version(true)
-)]
-pub struct CommonArgs {
-    #[clap(display_order(995),long, default_value = "127.0.0.1:11773")]
-    /// HTTP endpoint of a running melwalletd instance
-    pub endpoint: SocketAddr,
-    /// Outputs raw, unformatted json
-    #[clap(display_order(995),long)]
-    pub raw: bool,
-}
-
-impl CommonArgs {
-    pub fn rpc_client(&self) -> MelwalletdClient<DaemonClient> {
-        MelwalletdClient(DaemonClient::new(self.endpoint))
-    }
-}
-
-#[derive(Parser, Clone, Debug)]
 pub struct WalletArgs {
     #[clap(display_order(0), short, long)]
     /// Name of the wallet to create or use
     pub wallet: String,
-
-    #[clap(flatten)]
-    pub common: CommonArgs,
 }
 
 impl WalletArgs {
-    pub async fn wallet(&self) -> http_types::Result<WalletSummary> {
-        Ok(self
-            .common
-            .rpc_client()
-            .wallet_summary(self.wallet.clone())
-            .await??
-        )
-    }
+    // pub async fn wallet(&self) -> http_types::Result<WalletSummary> {
+    //     Ok(self
+    //         .common
+    //         .rpc_client()
+    //         .wallet_summary(self.wallet.clone())
+    //         .await??
+    //     )
+    // }
     
 }
 
@@ -181,10 +156,7 @@ pub enum Args {
      /// Checks a pool. 
      #[clap[display_order(9),verbatim_doc_comment]]
      Pool {
-         #[clap(flatten)]
-         common: CommonArgs,
          #[clap(long)]
- 
          /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
          pool: PoolKey,
      },
@@ -275,9 +247,9 @@ pub enum Args {
         #[clap(long)]
         duration: Option<u64>,
     },
-    /// Show the summary of the network connected to the associated melwalletd instance
-    #[clap[display_order(24)]]
-    NetworkSummary(CommonArgs),
+    // /// Show the summary of the network connected to the associated melwalletd instance
+    // #[clap[display_order(24)]]
+    // NetworkSummary(CommonArgs),
 
     
     /// Generate bash autocompletions

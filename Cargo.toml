@@ -45,8 +45,6 @@ log= "0.4.16"
 tracing= "0.1.32"
 smol= "1.2.5"
 serde_json= { version = "1.0.79", features = ["arbitrary_precision"] }
-async-h1= "2.3.3"
-http-types= "2.12.0"
 serde_with= "1.12.0"
 colored= "2.0.0"
 tabwriter={ version = "1.2.1", features = ["ansi_formatting"] }
@@ -60,10 +58,9 @@ clap = { version = "4.1.2", features = ["derive", "cargo"] }
 clap_complete = "4.1.1" 
 terminal_size = "0.2.1"
 melwalletd-prot = "0.3.1"
-nanorpc = "0.1.12"
-async-trait = "0.1.58"
 melvm = "0.1.0"
 melstructs = "0.3.2"
+melwallet = {git = "https://github.com/mel-project/melwallet"}
 
 [dev-dependencies]
 assert_cmd = "2.0.7"
