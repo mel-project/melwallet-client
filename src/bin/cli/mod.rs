@@ -118,7 +118,6 @@ impl WalletArgs {
     
 }
 
-
 #[derive(Parser, Clone, Debug)]
 #[clap(
     max_term_width(50),
@@ -132,27 +131,12 @@ impl WalletArgs {
     propagate_version(true),
     
 )]
-/// Themelio Wallet Command Line Interface
+/// Mel Wallet Command Line Interface
 
 pub enum Args {
     /// Create a wallet.  Ex: `melwallet-cli create -w wallet123`
     #[clap[display_order(1)]]
     Create {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-    },
-    /// List all available wallets
-    #[clap[display_order(1)]]
-    List(CommonArgs),
-    /// Unlocks a wallet. Ex: `melwallet-cli unlock -w wallet123`
-    #[clap[display_order(3)]]
-    Unlock {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-    },
-    /// Locks a wallet 
-    #[clap[display_order(4)]]
-    Lock {
         #[clap(flatten)]
         wargs: WalletArgs,
     },

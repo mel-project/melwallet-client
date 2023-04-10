@@ -97,19 +97,6 @@ fn main() -> http_types::Result<()> {
                 twriter.flush()?;
                 (serde_json::to_string_pretty(&summary)?, wargs.common)
             }
-            Args::List(common) => {
-                let rpc_client = common.rpc_client();
-                let wallets = rpc_client.list_wallets().await?;
-                // let mut wallets_json = "".to_string();
-                for wallet_name in wallets.clone() {
-                    // let json_string = serde_json::to_string_pretty(&summary)?.to_owned();
-                    // wallets_json +&&= &json_string;
-                    let summary = rpc_client.wallet_summary(wallet_name.clone()).await??;
-                    write_wallet_summary(&mut twriter, &wallet_name, &summary)?;
-                    writeln!(twriter)?;
-                }
-                (serde_json::to_string_pretty(&wallets)?, common)
-            }
             Args::Summary(wargs) => {
                 let _rpc_client = wargs.common.rpc_client();
                 let summary = wargs.wallet().await?;
@@ -219,7 +206,7 @@ fn main() -> http_types::Result<()> {
                         .bold()
                         .italic()
                 )?;
-                todo!("statking is not yet supported unimplemented")
+                todo!("staking is not yet supported")
 
                 // let tx = wallet
                 //     .prepare_stake_transaction(StakeDoc {
@@ -237,14 +224,6 @@ fn main() -> http_types::Result<()> {
                 wait_tx(&rpc_client, &wargs.wallet, TxHash(txhash)).await?;
                 (serde_json::to_string_pretty(&txhash)?, wargs.common)
             }
-            Args::Unlock { wargs } => {
-                let rpc_client = wargs.common.rpc_client();
-
-                let _wallet = wargs.wallet().await?;
-                let pwd = enter_password_prompt().await?;
-                rpc_client.unlock_wallet(wargs.wallet, pwd).await??;
-                ("".into(), wargs.common)
-            }
             Args::ExportSk { wargs } => {
                 let rpc_client = wargs.common.rpc_client();
                 let _wallet = wargs.wallet().await?;
@@ -252,12 +231,6 @@ fn main() -> http_types::Result<()> {
                 let sk = rpc_client.export_sk(wargs.wallet, pwd).await??;
                 writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
                 (serde_json::to_string_pretty(&sk)?, wargs.common)
-            }
-            Args::Lock { wargs } => {
-                let rpc_client = wargs.common.rpc_client();
-                let wallet_name = wargs.wallet;
-                rpc_client.lock_wallet(wallet_name).await??;
-                ("".into(), wargs.common)
             }
             Args::Pool { common, pool } => {
                 let rpc_client = common.rpc_client();
