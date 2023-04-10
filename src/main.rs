@@ -1,8 +1,7 @@
 mod structs;
 
 use acidjson::AcidJson;
-use anyhow::Context;
-use autoswap::do_autoswap;
+
 use colored::{Color, ColoredString, Colorize};
 
 use clap::{CommandFactory, Parser};
@@ -12,19 +11,16 @@ use melwallet::Wallet;
 use once_cell::sync::Lazy;
 use smol::process::Child;
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
+
 use std::io::{BufReader, Read, Stdin};
 use std::path::Path;
 
-use melstructs::{
-    BlockHeight, CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxHash, TxKind,
-    STAKE_EPOCH,
-};
+use melstructs::{BlockHeight, NetID, Transaction, TxHash};
 
+use std::io::Write;
 use std::sync::Mutex;
-use std::{io::Write, time::Duration};
 use tabwriter::TabWriter;
-use tmelcrypt::{Ed25519PK, Ed25519SK};
+use tmelcrypt::Ed25519SK;
 mod autoswap;
 mod cli;
 
@@ -45,7 +41,7 @@ impl Drop for KillOnDrop {
 static STDIN_BUFFER: Lazy<Mutex<BufReader<Stdin>>> =
     Lazy::new(|| Mutex::new(BufReader::new(std::io::stdin())));
 
-async fn wait_tx(wallet_name: &str, txhash: TxHash) -> anyhow::Result<()> {
+async fn wait_tx(_wallet_name: &str, _txhash: TxHash) -> anyhow::Result<()> {
     todo!()
     // loop {
     //     let status = daemon
@@ -107,10 +103,10 @@ fn main() -> anyhow::Result<()> {
             }
             Args::Summary(wargs) => {
                 let wallet_with_key: AcidJson<WalletWithKey> =
-                    AcidJson::open(&Path::new(&wargs.wallet_path))?;
+                    AcidJson::open(Path::new(&wargs.wallet_path))?;
                 write_wallet_summary(&mut twriter, &wallet_with_key.read().wallet)?;
             }
-            Args::SendFaucet(wargs) => {
+            Args::SendFaucet(_wargs) => {
                 todo!()
                 // let rpc_client = wargs.common.rpc_client();
                 // let wallet_name = wargs.wallet;
@@ -119,13 +115,13 @@ fn main() -> anyhow::Result<()> {
                 // serde_json::to_string_pretty(&txhash)?
             }
             Args::Send {
-                wargs,
-                to,
-                force_spend,
-                add_covenant,
-                dry_run,
-                fee_ballast,
-                hex_data,
+                wargs: _,
+                to: _,
+                force_spend: _,
+                add_covenant: _,
+                dry_run: _,
+                fee_ballast: _,
+                hex_data: _,
             } => {
                 todo!()
                 // let _wallet = wargs.wallet().await?;
@@ -157,20 +153,23 @@ fn main() -> anyhow::Result<()> {
                 // }
             }
             Args::Stake {
-                wargs,
+                wargs: _,
                 value: _,
-                start,
-                duration,
-                staker_pubkey,
+                start: _,
+                duration: _,
+                staker_pubkey: _,
             } => {
                 todo!("staking is not yet supported")
             }
-            Args::WaitConfirmation { wargs, txhash } => {
+            Args::WaitConfirmation {
+                wargs: _,
+                txhash: _,
+            } => {
                 todo!()
                 // wait_tx(&rpc_client, &wargs.wallet, TxHash(txhash)).await?;
                 // serde_json::to_string_pretty(&txhash)?
             }
-            Args::ExportSk { wargs } => {
+            Args::ExportSk { wargs: _ } => {
                 todo!()
                 // let _wallet = wargs.wallet().await?;
                 // let pwd = enter_password_prompt().await?;
@@ -178,7 +177,7 @@ fn main() -> anyhow::Result<()> {
                 // writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
                 // (serde_json::to_string_pretty(&sk)?, wargs.common)
             }
-            Args::Pool { pool } => {
+            Args::Pool { pool: _ } => {
                 todo!()
                 // let pool_state = rpc_client
                 //     .melswap_info(pool)
@@ -203,18 +202,18 @@ fn main() -> anyhow::Result<()> {
                 // )?;
                 // serde_json::to_string_pretty(&pool_state)?
             }
-            Args::Autoswap { wargs, value } => {
+            Args::Autoswap { wargs: _, value: _ } => {
                 todo!()
                 // let wallet = wargs.wallet;
                 // do_autoswap(rpc_client, &wallet, value.into()).await;
                 // "".into()
             }
             Args::Swap {
-                wargs,
-                value,
-                from,
-                to,
-                wait,
+                wargs: _,
+                value: _,
+                from: _,
+                to: _,
+                wait: _,
             } => {
                 todo!()
                 // let wallet_name = &wargs.wallet;
@@ -282,11 +281,11 @@ fn main() -> anyhow::Result<()> {
                 // serde_json::to_string_pretty(&to_send)?
             }
             Args::LiqDeposit {
-                wargs,
-                a_count,
-                a_denom,
-                b_count,
-                b_denom,
+                wargs: _,
+                a_count: _,
+                a_denom: _,
+                b_count: _,
+                b_denom: _,
             } => {
                 todo!()
                 // let wallet_summary = wargs.wallet().await?;
@@ -333,7 +332,10 @@ fn main() -> anyhow::Result<()> {
                 // send_tx(&mut twriter, rpc_client, wallet_name, tx.clone()).await?;
                 // (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
-            Args::ImportSk { wargs, secret } => {
+            Args::ImportSk {
+                wargs: _,
+                secret: _,
+            } => {
                 todo!()
                 //     let wallet_name = &wargs.wallet;
                 //     let pwd = enter_password_prompt().await?;
@@ -419,10 +421,10 @@ fn color_network(netid: NetID) -> Color {
     }
 }
 async fn send_tx(
-    mut twriter: impl Write,
+    _twriter: impl Write,
     // daemon: MelwalletdClient<DaemonClient>,
-    wallet_name: &str,
-    tx: Transaction,
+    _wallet_name: &str,
+    _tx: Transaction,
 ) -> anyhow::Result<()> {
     todo!()
     // writeln!(twriter, "{}", "TRANSACTION RECIPIENTS".bold())?;

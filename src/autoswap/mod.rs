@@ -1,15 +1,15 @@
-use std::time::Duration;
 
-use crate::wait_tx;
-use anyhow::Context;
-use colored::Colorize;
-use melstructs::PoolKey;
-use melstructs::{CoinData, CoinValue, Denom, Transaction, TxKind};
+
+
+
+
+
+use melstructs::{CoinValue, Denom, Transaction};
 
 /// Execute arbitrage
 pub async fn do_autoswap(
-    wallet_name: &str,
-    value: CoinValue,
+    _wallet_name: &str,
+    _value: CoinValue,
 ) {
     // loop {
     //     if let Err(err) = do_autoswap_once(&daemon, wallet_name, value).await {
@@ -20,8 +20,8 @@ todo!()
 }
 
 async fn do_autoswap_once(
-    wallet_name: &str,
-    value: CoinValue,
+    _wallet_name: &str,
+    _value: CoinValue,
 ) -> anyhow::Result<()> {
     // // first, we get the relevant pool states
     // let ms_state = daemon
@@ -66,10 +66,10 @@ async fn do_autoswap_once(
 }
 
 async fn execute_swap(
-    wallet_name: &str,
-    from_value: Option<CoinValue>,
-    from: Denom,
-    to: Denom,
+    _wallet_name: &str,
+    _from_value: Option<CoinValue>,
+    _from: Denom,
+    _to: Denom,
 ) -> anyhow::Result<()> {
     // let summary = daemon.wallet_summary(wallet_name.into()).await??;
     // let max_from_value = summary
@@ -93,10 +93,10 @@ async fn execute_swap(
 }
 
 async fn prepare_swap(
-    wallet_name: &str,
-    from_value: CoinValue,
-    from: Denom,
-    to: Denom,
+    _wallet_name: &str,
+    _from_value: CoinValue,
+    _from: Denom,
+    _to: Denom,
 ) -> anyhow::Result<Transaction> {
     todo!()
     // let summary = daemon.wallet_summary(wallet_name.into()).await??;
