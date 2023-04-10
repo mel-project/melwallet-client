@@ -1,5 +1,5 @@
 use melwallet::Wallet;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tmelcrypt::Ed25519SK;
 
 #[derive(Serialize, Deserialize)]

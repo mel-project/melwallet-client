@@ -6,16 +6,18 @@ use colored::{Color, ColoredString, Colorize};
 
 use clap::{CommandFactory, Parser};
 
+use melprot::{Client, CoinChange};
 use melwallet::Wallet;
 
 use once_cell::sync::Lazy;
 use smol::process::Child;
+use smol::stream::StreamExt;
 use std::collections::BTreeMap;
 
 use std::io::{BufReader, Read, Stdin};
 use std::path::Path;
 
-use melstructs::{BlockHeight, NetID, Transaction, TxHash};
+use melstructs::{BlockHeight, CoinData, CoinID, NetID, Transaction, TxHash};
 
 use std::io::Write;
 use std::sync::Mutex;
@@ -72,6 +74,42 @@ async fn wait_tx(_wallet_name: &str, _txhash: TxHash) -> anyhow::Result<()> {
     // Ok(())
 }
 
+async fn sync_wallet(wallet_path: &str) -> anyhow::Result<()> {
+    let wallet_with_key: AcidJson<WalletWithKey> = AcidJson::open(Path::new(wallet_path))?;
+    let mut wallet_guard = wallet_with_key.write();
+    let client = melprot::Client::autoconnect(wallet_guard.wallet.netid).await?;
+    let latest_height = client.latest_snapshot().await?.current_header().height;
+    let mut stream = client.stream_snapshots(wallet_guard.wallet.height).boxed();
+    let mut new_coins = vec![];
+    let mut spent_coins = vec![];
+
+    while let Some(snapshot) = stream.next().await {
+        if snapshot.current_header().height > latest_height {
+            break;
+        }
+        let ccs = snapshot
+            .get_coin_changes(wallet_guard.wallet.address)
+            .await?;
+        for cc in ccs {
+            match cc {
+                CoinChange::Add(id) => {
+                    if let Some(data_height) = snapshot.get_coin(id).await? {
+                        new_coins.push((id, data_height.coin_data));
+                    }
+                }
+                CoinChange::Delete(id, _) => {
+                    spent_coins.push(id);
+                }
+            }
+        }
+    }
+
+    wallet_guard
+        .wallet
+        .add_coins(latest_height, new_coins, spent_coins)?;
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     smolscale::block_on(async move {
         let mut twriter = TabWriter::new(std::io::stderr());
@@ -102,6 +140,7 @@ fn main() -> anyhow::Result<()> {
                 println!("successfully created wallet");
             }
             Args::Summary(wargs) => {
+                sync_wallet(&wargs.wallet_path);
                 let wallet_with_key: AcidJson<WalletWithKey> =
                     AcidJson::open(Path::new(&wargs.wallet_path))?;
                 write_wallet_summary(&mut twriter, &wallet_with_key.read().wallet)?;

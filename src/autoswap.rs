@@ -1,28 +1,16 @@
-
-
-
-
-
-
 use melstructs::{CoinValue, Denom, Transaction};
 
 /// Execute arbitrage
-pub async fn do_autoswap(
-    _wallet_name: &str,
-    _value: CoinValue,
-) {
+pub async fn do_autoswap(_wallet_name: &str, _value: CoinValue) {
     // loop {
     //     if let Err(err) = do_autoswap_once(&daemon, wallet_name, value).await {
     //         eprintln!("cannot autoswap: {}", err.to_string().red())
     //     }
     // }
-todo!()
+    todo!()
 }
 
-async fn do_autoswap_once(
-    _wallet_name: &str,
-    _value: CoinValue,
-) -> anyhow::Result<()> {
+async fn do_autoswap_once(_wallet_name: &str, _value: CoinValue) -> anyhow::Result<()> {
     // // first, we get the relevant pool states
     // let ms_state = daemon
     //     .melswap_info(PoolKey::new(Denom::Mel, Denom::Sym))
