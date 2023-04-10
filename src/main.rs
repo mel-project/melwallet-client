@@ -75,21 +75,20 @@ async fn wait_tx(_wallet_name: &str, _txhash: TxHash) -> anyhow::Result<()> {
 }
 
 async fn sync_wallet(wallet_path: &str) -> anyhow::Result<()> {
-    let wallet_with_key: AcidJson<WalletWithKey> = AcidJson::open(Path::new(wallet_path))?;
-    let mut wallet_guard = wallet_with_key.write();
-    let client = melprot::Client::autoconnect(wallet_guard.wallet.netid).await?;
+    let wwk: AcidJson<WalletWithKey> = AcidJson::open(Path::new(wallet_path))?;
+    let netid = wwk.read().wallet.netid;
+    let client = melprot::Client::autoconnect(netid).await?;
     let latest_height = client.latest_snapshot().await?.current_header().height;
-    let mut stream = client.stream_snapshots(wallet_guard.wallet.height).boxed();
-    let mut new_coins = vec![];
-    let mut spent_coins = vec![];
+    let mut stream = client.stream_snapshots(wwk.read().wallet.height).boxed();
 
     while let Some(snapshot) = stream.next().await {
         if snapshot.current_header().height > latest_height {
             break;
         }
-        let ccs = snapshot
-            .get_coin_changes(wallet_guard.wallet.address)
-            .await?;
+        let mut new_coins = vec![];
+        let mut spent_coins = vec![];
+        let wallet_address = wwk.read().wallet.address;
+        let ccs = snapshot.get_coin_changes(wallet_address).await?;
         for cc in ccs {
             match cc {
                 CoinChange::Add(id) => {
@@ -102,11 +101,11 @@ async fn sync_wallet(wallet_path: &str) -> anyhow::Result<()> {
                 }
             }
         }
-    }
 
-    wallet_guard
-        .wallet
-        .add_coins(latest_height, new_coins, spent_coins)?;
+        wwk.write()
+            .wallet
+            .add_coins(latest_height, new_coins, spent_coins)?;
+    }
     Ok(())
 }
 
@@ -140,7 +139,7 @@ fn main() -> anyhow::Result<()> {
                 println!("successfully created wallet");
             }
             Args::Summary(wargs) => {
-                sync_wallet(&wargs.wallet_path);
+                sync_wallet(&wargs.wallet_path).await?;
                 let wallet_with_key: AcidJson<WalletWithKey> =
                     AcidJson::open(Path::new(&wargs.wallet_path))?;
                 write_wallet_summary(&mut twriter, &wallet_with_key.read().wallet)?;
