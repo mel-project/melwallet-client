@@ -114,6 +114,7 @@ pub enum Args {
     Create {
         #[clap(flatten)]
         wargs: WalletArgs,
+        #[clap(long)]
         network: NetID,
     },
     /// Send a 1000 MEL faucet transaction for a testnet wallet

@@ -84,7 +84,7 @@ fn main() -> anyhow::Result<()> {
         if let Args::GenerateAutocomplete = args {
             generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
         };
-        let command_output: String = match args {
+        match args {
             Args::Create { wargs, network } => {
                 let wallet_path = Path::new(&wargs.wallet_path);
                 let secret = Ed25519SK::generate();
@@ -103,14 +103,12 @@ fn main() -> anyhow::Result<()> {
                 };
 
                 std::fs::write(wallet_path, serde_json::to_string(&wallet_with_key)?)?;
-                "successfully created wallet".to_string()
+                println!("successfully created wallet");
             }
             Args::Summary(wargs) => {
-                todo!()
-                // let _rpc_client = wargs.common.rpc_client();
-                // let summary = wargs.wallet().await?;
-                // write_wallet_summary(&mut twriter, &wargs.wallet, &summary)?;
-                // serde_json::to_string_pretty(&summary)?
+                let wallet_with_key: AcidJson<WalletWithKey> =
+                    AcidJson::open(&Path::new(&wargs.wallet_path))?;
+                write_wallet_summary(&mut twriter, &wallet_with_key.read().wallet)?;
             }
             Args::SendFaucet(wargs) => {
                 todo!()
@@ -386,8 +384,6 @@ fn main() -> anyhow::Result<()> {
         };
         twriter.flush()?;
 
-        std::io::stdout().write_all(format!("{}\n", &command_output).as_bytes())?;
-
         Ok(())
     })
 }
@@ -449,11 +445,7 @@ async fn send_tx(
     // Ok(())
 }
 
-fn write_wallet_summary(
-    out: &mut impl Write,
-    wallet_name: &str,
-    wallet: &Wallet,
-) -> anyhow::Result<()> {
+fn write_wallet_summary(out: &mut impl Write, wallet: &Wallet) -> anyhow::Result<()> {
     writeln!(
         out,
         "Address:\t{}",
