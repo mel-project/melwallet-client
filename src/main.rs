@@ -1,29 +1,37 @@
+mod structs;
+
+use acidjson::AcidJson;
 use anyhow::Context;
 use autoswap::do_autoswap;
 use colored::{Color, ColoredString, Colorize};
 
 use clap::{CommandFactory, Parser};
 
-use melwalletd_prot::types::{PrepareTxArgs, WalletSummary};
-use melwalletd_prot::MelwalletdClient;
+use melwallet::Wallet;
+
 use once_cell::sync::Lazy;
 use smol::process::Child;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::io::{BufReader, Read, Stdin};
+use std::path::Path;
 
 use melstructs::{
-    CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxHash, TxKind, STAKE_EPOCH,
+    BlockHeight, CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxHash, TxKind,
+    STAKE_EPOCH,
 };
 
 use std::sync::Mutex;
 use std::{io::Write, time::Duration};
 use tabwriter::TabWriter;
-use tmelcrypt::Ed25519PK;
+use tmelcrypt::{Ed25519PK, Ed25519SK};
 mod autoswap;
 mod cli;
 
 use clap_complete::{generate, shells::Bash};
 use cli::Args;
+
+use crate::structs::WalletWithKey;
 struct KillOnDrop(Option<Child>);
 
 impl Drop for KillOnDrop {
@@ -37,10 +45,7 @@ impl Drop for KillOnDrop {
 static STDIN_BUFFER: Lazy<Mutex<BufReader<Stdin>>> =
     Lazy::new(|| Mutex::new(BufReader::new(std::io::stdin())));
 
-async fn wait_tx(
-    wallet_name: &str,
-    txhash: TxHash,
-) -> anyhow::Result<()> {
+async fn wait_tx(wallet_name: &str, txhash: TxHash) -> anyhow::Result<()> {
     todo!()
     // loop {
     //     let status = daemon
@@ -80,19 +85,25 @@ fn main() -> anyhow::Result<()> {
             generate(Bash, &mut command, "melwallet-cli", &mut std::io::stdout());
         };
         let command_output: String = match args {
-            Args::Create { wargs } => {
-                todo!()
-                // let wallet_name = wargs.wallet;
-                // // rpc.create_wallet(wallet_name.clone(), pwd, None).await??;
-                // let summary = rpc
-                //     .wallet_summary(wallet_name.clone())
-                //     .await
-                //     .context("just-created wallet is now gone")??;
+            Args::Create { wargs, network } => {
+                let wallet_path = Path::new(&wargs.wallet_path);
+                let secret = Ed25519SK::generate();
+                let cov = melvm::Covenant::std_ed25519_pk_new(secret.to_public());
+                let addr = cov.hash();
 
-                // write_wallet_summary(&mut twriter, &wallet_name, &summary)?;
-                // writeln!(twriter)?;
-                // twriter.flush()?;
-                // serde_json::to_string_pretty(&summary)?
+                let wallet_with_key = WalletWithKey {
+                    wallet: Wallet {
+                        address: addr,
+                        height: BlockHeight(0),
+                        confirmed_utxos: BTreeMap::new(),
+                        pending_outgoing: BTreeMap::new(),
+                        netid: network,
+                    },
+                    secret_key: secret,
+                };
+
+                std::fs::write(wallet_path, serde_json::to_string(&wallet_with_key)?)?;
+                "successfully created wallet".to_string()
             }
             Args::Summary(wargs) => {
                 todo!()
@@ -107,7 +118,7 @@ fn main() -> anyhow::Result<()> {
                 // let wallet_name = wargs.wallet;
                 // let txhash = rpc_client.send_faucet(wallet_name.clone()).await??;
                 // write_txhash(&mut twriter, &wallet_name, txhash)?;
-                // serde_json::to_string_pretty(&txhash)? 
+                // serde_json::to_string_pretty(&txhash)?
             }
             Args::Send {
                 wargs,
@@ -154,68 +165,7 @@ fn main() -> anyhow::Result<()> {
                 duration,
                 staker_pubkey,
             } => {
-                // let _staker_pubkey = Ed25519PK::from_bytes(
-                //     &hex::decode(&staker_pubkey).context("staker pubkey must be hex")?,
-                // )
-                // .context("staker pubkey must be 32 bytes")?;
-                // let _wallet = wargs.wallet().await?;
-                // let last_header = rpc_client.latest_header().await??;
-                // let next_epoch = last_header.height.epoch() + 1;
-                // let start_epoch = start.unwrap_or_default().max(next_epoch);
-                // let duration = duration.unwrap_or(1);
-                // let end_epoch = start_epoch + duration;
-                // let post_end_epoch = start_epoch + duration + 1;
-                // const BLOCKS_IN_DAY: u64 = 2880;
-                // writeln!(
-                //     twriter,
-                //     "Latest:\tblock {} (epoch {})",
-                //     (last_header.height).to_string().bold(),
-                //     last_header.height / STAKE_EPOCH
-                // )?;
-                // writeln!(
-                //     twriter,
-                //     "Voting rights start:\tblock {} (epoch {}, in {} days)",
-                //     (start_epoch * STAKE_EPOCH).to_string().bold().bright_blue(),
-                //     start_epoch,
-                //     (start_epoch * STAKE_EPOCH - last_header.height.0) / BLOCKS_IN_DAY
-                // )?;
-                // writeln!(
-                //     twriter,
-                //     "Voting rights end:\tblock {} (epoch {}, in {} days)",
-                //     (end_epoch * STAKE_EPOCH).to_string().bold().bright_yellow(),
-                //     end_epoch,
-                //     (end_epoch * STAKE_EPOCH - last_header.height.0) / BLOCKS_IN_DAY
-                // )?;
-                // writeln!(
-                //     twriter,
-                //     "Syms unlock:\tblock {} (epoch {}, in {} days)",
-                //     (post_end_epoch * STAKE_EPOCH)
-                //         .to_string()
-                //         .bold()
-                //         .bright_green(),
-                //     post_end_epoch,
-                //     (post_end_epoch * STAKE_EPOCH - last_header.height.0) / BLOCKS_IN_DAY
-                // )?;
-                // writeln!(
-                //     twriter,
-                //     "{}",
-                //     "WARNING: Syms are immediately locked no matter when voting rights start!"
-                //         .bright_red()
-                //         .bold()
-                //         .italic()
-                // )?;
                 todo!("staking is not yet supported")
-
-                // let tx = wallet
-                //     .prepare_stake_transaction(StakeDoc {
-                //         e_start: start_epoch,
-                //         e_post_end: post_end_epoch,
-                //         syms_staked: value,
-                //         pubkey: staker_pubkey,
-                //     })
-                //     .await?;
-                // send_tx(&mut twriter, wallet, tx.clone()).await?;
-                // (serde_json::to_string_pretty(&tx)?, wargs.common)
             }
             Args::WaitConfirmation { wargs, txhash } => {
                 todo!()
@@ -231,7 +181,7 @@ fn main() -> anyhow::Result<()> {
                 // (serde_json::to_string_pretty(&sk)?, wargs.common)
             }
             Args::Pool { pool } => {
-               todo!()
+                todo!()
                 // let pool_state = rpc_client
                 //     .melswap_info(pool)
                 //     .await??
@@ -259,7 +209,7 @@ fn main() -> anyhow::Result<()> {
                 todo!()
                 // let wallet = wargs.wallet;
                 // do_autoswap(rpc_client, &wallet, value.into()).await;
-                // "".into() 
+                // "".into()
             }
             Args::Swap {
                 wargs,
@@ -340,7 +290,7 @@ fn main() -> anyhow::Result<()> {
                 b_count,
                 b_denom,
             } => {
-           todo!()
+                todo!()
                 // let wallet_summary = wargs.wallet().await?;
                 // let wallet_name = &wargs.wallet;
                 // let covhash = wallet_summary.address;
@@ -387,58 +337,57 @@ fn main() -> anyhow::Result<()> {
             }
             Args::ImportSk { wargs, secret } => {
                 todo!()
-            //     let wallet_name = &wargs.wallet;
-            //     let pwd = enter_password_prompt().await?;
+                //     let wallet_name = &wargs.wallet;
+                //     let pwd = enter_password_prompt().await?;
 
-            //     rpc_client
-            //         .create_wallet(wallet_name.to_owned(), pwd, Some(secret))
-            //         .await??;
+                //     rpc_client
+                //         .create_wallet(wallet_name.to_owned(), pwd, Some(secret))
+                //         .await??;
 
-            //     let summary = rpc_client.wallet_summary(wallet_name.to_owned()).await??;
+                //     let summary = rpc_client.wallet_summary(wallet_name.to_owned()).await??;
 
-            //     write_wallet_summary(&mut twriter, wallet_name, &summary)?;
-            //     writeln!(twriter)?;
-            //     twriter.flush()?;
-            //     (serde_json::to_string_pretty(&summary)?, wargs.common)
-            // }
-            // Args::SendRaw { wargs, txhex } => {
-            //     let rpc_client = wargs.common.rpc_client();
-            //     let wallet_name = &wargs.wallet;
-            //     let tx: Transaction =
-            //         stdcode::deserialize(&hex::decode(&txhex).context("cannot decode hex")?)
-            //             .context("malformed transaction")?;
+                //     write_wallet_summary(&mut twriter, wallet_name, &summary)?;
+                //     writeln!(twriter)?;
+                //     twriter.flush()?;
+                //     (serde_json::to_string_pretty(&summary)?, wargs.common)
+                // }
+                // Args::SendRaw { wargs, txhex } => {
+                //     let rpc_client = wargs.common.rpc_client();
+                //     let wallet_name = &wargs.wallet;
+                //     let tx: Transaction =
+                //         stdcode::deserialize(&hex::decode(&txhex).context("cannot decode hex")?)
+                //             .context("malformed transaction")?;
 
-            //     send_tx(&mut twriter, rpc_client, wallet_name, tx.clone()).await?;
-            //     (serde_json::to_string_pretty(&tx)?, wargs.common)
-            // }
-            // Args::NetworkSummary(common) => {
-            //     let rpc_client = common.rpc_client();
+                //     send_tx(&mut twriter, rpc_client, wallet_name, tx.clone()).await?;
+                //     (serde_json::to_string_pretty(&tx)?, wargs.common)
+                // }
+                // Args::NetworkSummary(common) => {
+                //     let rpc_client = common.rpc_client();
 
-            //     let header = rpc_client.latest_header().await??;
-            //     let header_string = serde_json::to_string_pretty(&header)?;
+                //     let header = rpc_client.latest_header().await??;
+                //     let header_string = serde_json::to_string_pretty(&header)?;
 
-            //     let mut adhoc: BTreeMap<&str, serde_json::Value> =
-            //         serde_json::from_str(&header_string)?;
+                //     let mut adhoc: BTreeMap<&str, serde_json::Value> =
+                //         serde_json::from_str(&header_string)?;
 
-            //     let netid = header.network;
-            //     let network = format_network(netid);
-            //     writeln!(twriter, "Network: \t{network}")?;
-            //     adhoc.remove("network");
-            //     for (key, value) in adhoc.into_iter() {
-            //         let color_value = value.to_string();
-            //         let color_key = key.to_string();
-            //         writeln!(twriter, "{}: \t{}", color_key, color_value)?;
-            //     }
-            //     writeln!(twriter)?;
-            //     (header_string, common)
+                //     let netid = header.network;
+                //     let network = format_network(netid);
+                //     writeln!(twriter, "Network: \t{network}")?;
+                //     adhoc.remove("network");
+                //     for (key, value) in adhoc.into_iter() {
+                //         let color_value = value.to_string();
+                //         let color_key = key.to_string();
+                //         writeln!(twriter, "{}: \t{}", color_key, color_value)?;
+                //     }
+                //     writeln!(twriter)?;
+                //     (header_string, common)
             }
             _ => return Ok(()),
         };
         twriter.flush()?;
 
+        std::io::stdout().write_all(format!("{}\n", &command_output).as_bytes())?;
 
-std::io::stdout().write_all(format!("{}\n", &command_output).as_bytes())?;
-        
         Ok(())
     })
 }
@@ -503,30 +452,18 @@ async fn send_tx(
 fn write_wallet_summary(
     out: &mut impl Write,
     wallet_name: &str,
-    summary: &WalletSummary,
+    wallet: &Wallet,
 ) -> anyhow::Result<()> {
     writeln!(
         out,
-        "Wallet name:\t{} {}",
-        wallet_name.bold(),
-        if summary.locked {
-            "(locked)".red()
-        } else {
-            "(unlocked)".green()
-        }
-    )?;
-    writeln!(out, "Network:\t{}", summary.network)?;
-    writeln!(
-        out,
         "Address:\t{}",
-        summary.address.to_string().bright_blue()
+        wallet.address.to_string().bright_blue()
     )?;
-    writeln!(out, "MEL Balance:\t{}\tMEL", summary.total_micromel)?;
-    writeln!(out, "Detailed Balance:")?;
-    for (k, v) in summary.detailed_balance.iter() {
-        writeln!(out, "\t{}\t{}", v, k)?;
+    writeln!(out, "Balance:")?;
+    for (denom, value) in wallet.balances() {
+        writeln!(out, "{value} {denom}")?;
     }
-    writeln!(out, "Staked:\t{}\tSYM", summary.staked_microsym)?;
+
     Ok(())
 }
 

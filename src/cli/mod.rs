@@ -5,7 +5,7 @@ use clap::{Parser, crate_version};
 use terminal_size::{Width, terminal_size};
 use std::str::FromStr;
 use melstructs::{
-    Address, CoinData, CoinID, CoinValue, Denom, PoolKey};
+    Address, CoinData, CoinID, CoinValue, Denom, PoolKey, NetID};
 use tmelcrypt::{HashVal};
 
 
@@ -77,8 +77,8 @@ impl FromStr for CoinDataWrapper {
 #[derive(Parser, Clone, Debug)]
 pub struct WalletArgs {
     #[clap(display_order(0), short, long)]
-    /// Name of the wallet to create or use
-    pub wallet: String,
+    // path to the wallet to create or use
+    pub wallet_path: String,
 }
 
 impl WalletArgs {
@@ -114,6 +114,7 @@ pub enum Args {
     Create {
         #[clap(flatten)]
         wargs: WalletArgs,
+        network: NetID,
     },
     /// Send a 1000 MEL faucet transaction for a testnet wallet
     #[clap[display_order(5)]]

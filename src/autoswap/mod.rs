@@ -5,8 +5,6 @@ use anyhow::Context;
 use colored::Colorize;
 use melstructs::PoolKey;
 use melstructs::{CoinData, CoinValue, Denom, Transaction, TxKind};
-use melwalletd_prot::types::PrepareTxArgs;
-use melwalletd_prot::MelwalletdClient;
 
 /// Execute arbitrage
 pub async fn do_autoswap(

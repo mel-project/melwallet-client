@@ -1,8 +1,8 @@
 [package]
-name = "melwallet-client"
+name = "melwallet-cli"
 version = "0.7.3"
-authors = ["Themelio Labs"]
-edition = "2018"
+
+edition = "2021"
 
 description = "melwalletd client library"
 license = "MPL-2.0"
@@ -11,14 +11,6 @@ repository = "https://github.com/themeliolabs/melwallet-client"
 
 # these fields were added to clean up the output while writing tests
 # https://doc.rust-lang.org/cargo/reference/cargo-targets.htm
-[[bin]]
-name = "melwallet-cli"
-test = false
-doctest = false
-
-[lib]
-test = false
-doctest = false
 
 [[tests]]
 test = true
@@ -57,10 +49,11 @@ rpassword = "7.0.0"
 clap = { version = "4.1.2", features = ["derive", "cargo"] }
 clap_complete = "4.1.1" 
 terminal_size = "0.2.1"
-melwalletd-prot = "0.3.1"
+
 melvm = "0.1.0"
 melstructs = "0.3.2"
 melwallet = {git = "https://github.com/mel-project/melwallet"}
+acidjson = "0.1.2"
 
 [dev-dependencies]
 assert_cmd = "2.0.7"
