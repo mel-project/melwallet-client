@@ -113,6 +113,7 @@ pub enum Args {
         ///
         #[clap(long, verbatim_doc_comment)]
         to: Vec<CoinDataWrapper>,
+
         /// Force the selection of a coin
         #[clap(long)]
         force_spend: Vec<CoinID>,

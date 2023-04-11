@@ -2,22 +2,26 @@ mod structs;
 
 use acidjson::AcidJson;
 
+use anyhow::Context;
+use base32::Alphabet;
 use colored::{Color, ColoredString, Colorize};
 
 use clap::{CommandFactory, Parser};
 
 use melprot::{Client, CoinChange};
-use melwallet::Wallet;
+use melwallet::{PrepareTxArgs, StdEd25519Signer, Wallet};
 
+use bytes::Bytes;
 use once_cell::sync::Lazy;
 use smol::process::Child;
 use smol::stream::StreamExt;
 use std::collections::BTreeMap;
+use stdcode::StdcodeSerializeExt;
 
 use std::io::{BufReader, Read, Stdin};
 use std::path::Path;
 
-use melstructs::{BlockHeight, CoinData, CoinID, NetID, Transaction, TxHash};
+use melstructs::{BlockHeight, NetID, Transaction, TxHash};
 
 use std::io::Write;
 use std::sync::Mutex;
@@ -76,35 +80,69 @@ async fn wait_tx(_wallet_name: &str, _txhash: TxHash) -> anyhow::Result<()> {
 
 async fn sync_wallet(wallet_path: &str) -> anyhow::Result<()> {
     let wwk: AcidJson<WalletWithKey> = AcidJson::open(Path::new(wallet_path))?;
+    let wallet_address = wwk.read().wallet.address;
     let netid = wwk.read().wallet.netid;
     let client = melprot::Client::autoconnect(netid).await?;
     let latest_height = client.latest_snapshot().await?.current_header().height;
-    let mut stream = client.stream_snapshots(wwk.read().wallet.height).boxed();
 
-    while let Some(snapshot) = stream.next().await {
-        if snapshot.current_header().height > latest_height {
-            break;
-        }
-        let mut new_coins = vec![];
-        let mut spent_coins = vec![];
-        let wallet_address = wwk.read().wallet.address;
-        let ccs = snapshot.get_coin_changes(wallet_address).await?;
-        for cc in ccs {
-            match cc {
-                CoinChange::Add(id) => {
-                    if let Some(data_height) = snapshot.get_coin(id).await? {
-                        new_coins.push((id, data_height.coin_data));
+    if (latest_height.0 - wwk.read().wallet.height.0) < 100 {
+        // we call `add_coins` unless we're too far out of sync with the network,
+        // because downloading all the coins might take a while for wallets with lots of coins
+        // and because we need to keep track of pending transactions.
+        // For example, we don't want to:
+        // 1. send a transaction (moves some coins into pending_outgoing)
+        // 2. reset the wallet (clears pending_outgoing)
+        // 3. immediately send another transaction that tries to use the same coins as the first transaction & fail
+
+        let mut stream = client
+            .stream_snapshots(wwk.read().wallet.height + BlockHeight(1))
+            .take((latest_height.0 - wwk.read().wallet.height.0) as usize)
+            .boxed();
+
+        while let Some(snapshot) = stream.next().await {
+            let mut new_coins = vec![];
+            let mut spent_coins = vec![];
+
+            let ccs = snapshot.get_coin_changes(wallet_address).await?;
+            for cc in ccs {
+                match cc {
+                    CoinChange::Add(id) => {
+                        if let Some(data_height) = snapshot.get_coin(id).await? {
+                            new_coins.push((id, data_height.coin_data));
+                        }
+                    }
+                    CoinChange::Delete(id, _) => {
+                        spent_coins.push(id);
                     }
                 }
-                CoinChange::Delete(id, _) => {
-                    spent_coins.push(id);
-                }
             }
-        }
 
-        wwk.write()
-            .wallet
-            .add_coins(latest_height, new_coins, spent_coins)?;
+            println!(
+                "calling wallet.add_coins... wallet.height = {} | snapshot.height = {}",
+                wwk.read().wallet.height.0,
+                snapshot.current_header().height
+            );
+
+            wwk.write().wallet.add_coins(
+                snapshot.current_header().height,
+                new_coins,
+                spent_coins,
+            )?;
+        }
+    } else {
+        println!("yo yo resyncing everything");
+        // resync everything
+        let latest_snapshot = client.latest_snapshot().await?;
+        if let Some(owned_coins) = latest_snapshot.get_coins(wallet_address).await? {
+            // println!("we own {} coins!", owned_coins.len());
+            // println!(
+            //     "{}",
+            //     serde_json::to_string(&owned_coins).context("cannot print out")?
+            // );
+            wwk.write()
+                .wallet
+                .full_reset(latest_snapshot.current_header().height, owned_coins)?
+        }
     }
     Ok(())
 }
@@ -140,11 +178,15 @@ fn main() -> anyhow::Result<()> {
             }
             Args::Summary(wargs) => {
                 sync_wallet(&wargs.wallet_path).await?;
+                println!("finished syncing wallet!");
                 let wallet_with_key: AcidJson<WalletWithKey> =
                     AcidJson::open(Path::new(&wargs.wallet_path))?;
                 write_wallet_summary(&mut twriter, &wallet_with_key.read().wallet)?;
             }
-            Args::SendFaucet(_wargs) => {
+            Args::SendFaucet(wargs) => {
+                // sync wallet with network
+                sync_wallet(&wargs.wallet_path).await?;
+
                 todo!()
                 // let rpc_client = wargs.common.rpc_client();
                 // let wallet_name = wargs.wallet;
@@ -153,42 +195,67 @@ fn main() -> anyhow::Result<()> {
                 // serde_json::to_string_pretty(&txhash)?
             }
             Args::Send {
-                wargs: _,
-                to: _,
-                force_spend: _,
-                add_covenant: _,
-                dry_run: _,
-                fee_ballast: _,
-                hex_data: _,
+                wargs,
+                to,
+                force_spend,
+                add_covenant,
+                dry_run,
+                fee_ballast,
+                hex_data,
             } => {
-                todo!()
-                // let _wallet = wargs.wallet().await?;
-                // let wallet_name = wargs.wallet;
-                // let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
-                // let cov: Vec<Vec<u8>> = add_covenant
-                //     .into_iter()
-                //     .map(|s| Ok(hex::decode(&s)?))
-                //     .collect::<anyhow::Result<Vec<_>>>()?;
+                // sync wallet with network
+                sync_wallet(&wargs.wallet_path).await?;
+                println!("finished syncing!");
+                // prepare transaction
+                let wwk: AcidJson<WalletWithKey> = AcidJson::open(Path::new(&wargs.wallet_path))?;
+                let netid = wwk.read().wallet.netid;
+                let client = Client::autoconnect(netid).await?;
 
-                // let ptx_args = PrepareTxArgs {
-                //     kind: TxKind::Normal,
-                //     inputs: force_spend,
-                //     outputs: desired_outputs,
-                //     covenants: cov,
-                //     data: hex::decode(&hex_data)?,
-                //     nobalance: vec![],
-                //     fee_ballast,
-                // };
-                // let tx = rpc_client
-                //     .prepare_tx(wallet_name.clone(), ptx_args)
-                //     .await??;
-                // if dry_run {
-                //     println!("{}", hex::encode(tx.stdcode()));
-                //     hex::encode(tx.stdcode())
-                // } else {
-                //     send_tx(&mut twriter, rpc_client, &wallet_name, tx.clone()).await?;
-                //     serde_json::to_string_pretty(&tx)?
-                // }
+                let inputs = {
+                    let mut v = vec![];
+                    let wallet_height = wwk.read().wallet.height;
+                    let snapshot = client.snapshot(wallet_height).await?;
+                    for id in force_spend {
+                        if let Some(cdh) = snapshot.get_coin(id).await? {
+                            v.push((id, cdh));
+                        }
+                    }
+                    v
+                };
+                let desired_outputs = to.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
+
+                let cov: Vec<Bytes> = add_covenant
+                    .into_iter()
+                    .map(|s| hex::decode(&s).unwrap().into())
+                    .collect();
+
+                let args = PrepareTxArgs {
+                    kind: melstructs::TxKind::Normal,
+                    inputs,
+                    outputs: desired_outputs,
+                    covenants: cov,
+                    data: hex::decode(&hex_data)?.into(),
+                    fee_ballast,
+                };
+
+                let signer = StdEd25519Signer(wwk.read().secret_key);
+                let fee_multiplier = client
+                    .latest_snapshot()
+                    .await?
+                    .current_header()
+                    .fee_multiplier;
+                let tx = wwk
+                    .read()
+                    .wallet
+                    .prepare_tx(args, &signer, fee_multiplier)?;
+
+                // send transaction, or print if it's a dry run
+                if dry_run {
+                    println!("{}", hex::encode(tx.stdcode()));
+                } else {
+                    send_tx(twriter, netid, &wargs.wallet_path, tx.clone()).await?;
+                    wwk.write().wallet.add_pending(tx);
+                }
             }
             Args::Stake {
                 wargs: _,
@@ -199,21 +266,16 @@ fn main() -> anyhow::Result<()> {
             } => {
                 todo!("staking is not yet supported")
             }
-            Args::WaitConfirmation {
-                wargs: _,
-                txhash: _,
-            } => {
+            Args::WaitConfirmation { wargs, txhash } => {
                 todo!()
-                // wait_tx(&rpc_client, &wargs.wallet, TxHash(txhash)).await?;
-                // serde_json::to_string_pretty(&txhash)?
             }
-            Args::ExportSk { wargs: _ } => {
-                todo!()
-                // let _wallet = wargs.wallet().await?;
-                // let pwd = enter_password_prompt().await?;
-                // let sk = rpc_client.export_sk(wargs.wallet, pwd).await??;
-                // writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
-                // (serde_json::to_string_pretty(&sk)?, wargs.common)
+            Args::ExportSk { wargs } => {
+                let wallet_with_key: AcidJson<WalletWithKey> =
+                    AcidJson::open(&Path::new(&wargs.wallet_path))?;
+                let secret = wallet_with_key.read().secret_key;
+                let sk: String = base32::encode(Alphabet::Crockford, &secret.0[..32]);
+                writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
+                twriter.flush()?;
             }
             Args::Pool { pool: _ } => {
                 todo!()
@@ -374,7 +436,6 @@ fn main() -> anyhow::Result<()> {
                 wargs: _,
                 secret: _,
             } => {
-                todo!()
                 //     let wallet_name = &wargs.wallet;
                 //     let pwd = enter_password_prompt().await?;
 
@@ -383,7 +444,7 @@ fn main() -> anyhow::Result<()> {
                 //         .await??;
 
                 //     let summary = rpc_client.wallet_summary(wallet_name.to_owned()).await??;
-
+                twriter.flush()?;
                 //     write_wallet_summary(&mut twriter, wallet_name, &summary)?;
                 //     writeln!(twriter)?;
                 //     twriter.flush()?;
@@ -415,14 +476,13 @@ fn main() -> anyhow::Result<()> {
                 //     for (key, value) in adhoc.into_iter() {
                 //         let color_value = value.to_string();
                 //         let color_key = key.to_string();
-                //         writeln!(twriter, "{}: \t{}", color_key, color_value)?;
-                //     }
-                //     writeln!(twriter)?;
-                //     (header_string, common)
+                twriter.flush()?; //         writeln!(twriter, "{}: \t{}", color_key, color_value)?;
+                                  //     }
+                                  //     writeln!(twriter)?;
+                                  //     (header_string, common)
             }
             _ => return Ok(()),
         };
-        twriter.flush()?;
 
         Ok(())
     })
@@ -459,30 +519,52 @@ fn color_network(netid: NetID) -> Color {
     }
 }
 async fn send_tx(
-    _twriter: impl Write,
-    // daemon: MelwalletdClient<DaemonClient>,
-    _wallet_name: &str,
-    _tx: Transaction,
+    mut twriter: impl Write,
+    network: NetID,
+    wallet_path: &str,
+    tx: Transaction,
 ) -> anyhow::Result<()> {
-    todo!()
-    // writeln!(twriter, "{}", "TRANSACTION RECIPIENTS".bold())?;
-    // writeln!(twriter, "{}", "Address\tAmount\tAdditional data".italic())?;
-    // for output in tx.outputs.iter() {
-    //     writeln!(
-    //         twriter,
-    //         "{}\t{} {}\t{:?}",
-    //         output.covhash.to_string().bright_blue(),
-    //         output.value,
-    //         output.denom,
-    //         hex::encode(&output.additional_data)
-    //     )?;
-    // }
-    // writeln!(twriter, "{}\t{} MEL", " (network fees)".yellow(), tx.fee)?;
-    // twriter.flush()?;
-    // proceed_prompt().await?;
-    // let txhash = daemon.send_tx(wallet_name.into(), tx).await??;
-    // write_txhash(&mut twriter, wallet_name, txhash)?;
-    // Ok(())
+    // preamble
+    writeln!(twriter, "{}", "TRANSACTION RECIPIENTS".bold())?;
+    writeln!(twriter, "{}", "Address\tAmount\tAdditional data".italic())?;
+    for output in tx.outputs.iter() {
+        writeln!(
+            twriter,
+            "{}\t{} {}\t{:?}",
+            output.covhash.to_string().bright_blue(),
+            output.value,
+            output.denom,
+            hex::encode(&output.additional_data)
+        )?;
+    }
+    writeln!(twriter, "{}\t{} MEL", " (network fees)".yellow(), tx.fee)?;
+    twriter.flush()?;
+    proceed_prompt().await?;
+
+    // do stuff
+    let client = Client::autoconnect(network).await?;
+    let _ = client
+        .latest_snapshot()
+        .await?
+        .get_raw()
+        .send_tx(tx.clone())
+        .await?;
+
+    // postamble
+    let txhash = tx.hash_nosigs();
+    writeln!(twriter, "Transaction hash:\t{}", txhash.to_string().bold())?;
+    writeln!(
+        twriter,
+        "(wait for confirmation with {})",
+        format!(
+            "melwallet-cli wait-confirmation -w {} {}",
+            wallet_path, txhash
+        )
+        .bright_blue(),
+    )?;
+    twriter.flush()?;
+
+    Ok(())
 }
 
 fn write_wallet_summary(out: &mut impl Write, wallet: &Wallet) -> anyhow::Result<()> {
@@ -496,20 +578,6 @@ fn write_wallet_summary(out: &mut impl Write, wallet: &Wallet) -> anyhow::Result
         writeln!(out, "{value} {denom}")?;
     }
 
-    Ok(())
-}
-
-fn write_txhash(out: &mut impl Write, wallet_name: &str, txhash: TxHash) -> anyhow::Result<()> {
-    writeln!(out, "Transaction hash:\t{}", txhash.to_string().bold())?;
-    writeln!(
-        out,
-        "(wait for confirmation with {})",
-        format!(
-            "melwallet-cli wait-confirmation -w {} {}",
-            wallet_name, txhash
-        )
-        .bright_blue(),
-    )?;
     Ok(())
 }
 
