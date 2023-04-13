@@ -48,7 +48,7 @@ async fn do_autoswap_once(value: CoinValue, state: &State) -> anyhow::Result<()>
         let to_value_2 = execute_swap(to_value_1, Denom::Erg, Denom::Sym, state).await?;
         execute_swap(to_value_2, Denom::Sym, Denom::Mel, state).await?;
     } else {
-        eprintln!("No arbitrage opportunities!");
+        eprintln!("No arbitrage opportunities! (mdsm = {mdsm_payoff}, msdm = {msdm_payoff}, value = {value})");
         smol::Timer::after(Duration::from_secs(60)).await;
     }
     Ok(())
@@ -66,7 +66,7 @@ async fn execute_swap(
     let tx = state.prepare_swap_tx(from_value, from, to).await?;
     state.send_raw(tx.clone()).await?;
 
-    wait_tx(state, tx.hash_nosigs()).await;
-    smol::Timer::after(Duration::from_secs(1)).await;
+    wait_tx(state, tx.hash_nosigs()).await?;
+
     Ok(CoinValue(to_value))
 }

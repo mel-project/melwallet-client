@@ -281,6 +281,7 @@ impl State {
 
     pub async fn sync_wallet(&self) -> anyhow::Result<()> {
         let wallet_address = self.wwk.read().wallet.address;
+        let wallet_starting_height = self.wwk.read().wallet.height;
         let latest_height = self
             .melclient
             .latest_snapshot()
@@ -288,7 +289,7 @@ impl State {
             .current_header()
             .height;
 
-        if (latest_height.0 - self.wwk.read().wallet.height.0) < 100 {
+        if (latest_height.0 - wallet_starting_height.0) < 100 {
             // we call `add_coins` unless we're too far out of sync with the network,
             // because downloading all the coins might take a while for wallets with lots of coins
             // and because we need to keep track of pending transactions.
@@ -296,7 +297,6 @@ impl State {
             // 1. send a transaction (moves some coins into pending_outgoing)
             // 2. reset the wallet (clears pending_outgoing)
             // 3. immediately send another transaction that tries to use the same coins as the first transaction & fail
-
             let mut stream = self
                 .melclient
                 .stream_snapshots(self.wwk.read().wallet.height + BlockHeight(1))
@@ -306,7 +306,6 @@ impl State {
             while let Some(snapshot) = stream.next().await {
                 let mut new_coins = vec![];
                 let mut spent_coins = vec![];
-
                 let ccs = snapshot.get_coin_changes(wallet_address).await?;
                 for cc in ccs {
                     match cc {
@@ -320,18 +319,21 @@ impl State {
                         }
                     }
                 }
-
-                // println!(
-                //     "calling wallet.add_coins... wallet.height = {} | snapshot.height = {}",
-                //     self.wwk.read().wallet.height.0,
-                //     snapshot.current_header().height
-                // );
-
                 self.wwk.write().wallet.add_coins(
                     snapshot.current_header().height,
                     new_coins,
                     spent_coins,
                 )?;
+
+                // if our wallet still has pending transactions new blocks have been produced, retransmit
+                if !self.wwk.read().wallet.pending_outgoing.is_empty()
+                    && latest_height > wallet_starting_height
+                {
+                    let pending_outgoing = self.wwk.read().wallet.pending_outgoing.clone();
+                    for (_, tx) in pending_outgoing.into_iter() {
+                        self.send_raw(tx).await?;
+                    }
+                }
             }
         } else {
             // resync everything

@@ -97,10 +97,10 @@ fn main() -> anyhow::Result<()> {
             SubcommandArgs::Create { network: _ } => {
                 // we already created the wallet earlier
             }
-            SubcommandArgs::SendFaucet => {
+            SubcommandArgs::SendFaucet { wait } => {
                 let tx = state.prepare_faucet_tx().await?;
                 state.send_raw(tx.clone()).await?;
-                send_postamble(&tx, twriter, &wallet_path)?;
+                send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
             }
             SubcommandArgs::Summary => {
                 let wallet_summary = state.wallet_summary().await?;
@@ -113,6 +113,7 @@ fn main() -> anyhow::Result<()> {
                 hex_data,
                 dry_run,
                 fee_ballast,
+                wait,
             } => {
                 let tx = state
                     .prepare_send_tx(to, force_spend, add_covenant, hex_data, fee_ballast)
@@ -140,7 +141,7 @@ fn main() -> anyhow::Result<()> {
 
                     // send
                     state.send_raw(tx.clone()).await?;
-                    send_postamble(&tx, twriter, &wallet_path)?;
+                    send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
                 }
             }
             SubcommandArgs::Pool { pool } => {
@@ -162,6 +163,7 @@ fn main() -> anyhow::Result<()> {
                     format!("{}", ratio).bold().bright_green(),
                     pool.left().to_string().italic()
                 )?;
+                twriter.flush()?;
             }
             SubcommandArgs::Swap {
                 value,
@@ -192,7 +194,7 @@ fn main() -> anyhow::Result<()> {
                 // send tx
                 state.send_raw(tx.clone()).await?;
                 if wait {
-                    wait_tx(&state, tx.hash_nosigs()).await;
+                    wait_tx(&state, tx.hash_nosigs()).await?;
                 }
             }
             SubcommandArgs::LiqDeposit {
@@ -200,29 +202,29 @@ fn main() -> anyhow::Result<()> {
                 a_denom,
                 b_count,
                 b_denom,
+                wait,
             } => {
                 let tx = state
                     .prepare_liq_deposit_tx(a_count, a_denom, b_count, b_denom)
                     .await?;
                 proceed_prompt().await?;
                 state.send_raw(tx.clone()).await?;
-                send_postamble(&tx, twriter, &wallet_path)?;
+                send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
             }
             SubcommandArgs::WaitConfirmation { txhash } => {
-                wait_tx(&state, TxHash(txhash)).await;
+                wait_tx(&state, TxHash(txhash)).await?;
             }
-            SubcommandArgs::SendRaw { txhex } => {
+            SubcommandArgs::SendRaw { txhex, wait } => {
                 let tx: Transaction =
                     stdcode::deserialize(&hex::decode(&txhex).context("cannot decode hex")?)
                         .context("malformed transaction")?;
                 proceed_prompt().await?;
                 state.send_raw(tx.clone()).await?;
-                send_postamble(&tx, twriter, &wallet_path)?;
+                send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
             }
             SubcommandArgs::ExportSk => {
                 let sk = state.export_sk()?;
                 writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
-                twriter.flush()?;
             }
             SubcommandArgs::ImportSk {
                 secret: _,
@@ -231,13 +233,14 @@ fn main() -> anyhow::Result<()> {
                 // we already imported the wallet earlier
             }
             SubcommandArgs::Autoswap { value } => {
-                do_autoswap(CoinValue(value), &state).await;
+                do_autoswap(value, &state).await;
             }
             SubcommandArgs::Stake {
                 value: _,
                 staker_pubkey: _,
                 start: _,
                 duration: _,
+                wait: _,
             } => todo!("Staking is not supported yet!"),
             SubcommandArgs::NetworkSummary => {
                 let header = state.latest_header().await?;
@@ -292,23 +295,30 @@ async fn proceed_prompt() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn send_postamble(
+async fn send_postamble(
     tx: &Transaction,
     mut twriter: TabWriter<Stderr>,
     wallet_path: &str,
+    state: &State,
+    wait: bool,
 ) -> anyhow::Result<()> {
-    let txhash = tx.hash_nosigs();
-    writeln!(twriter, "Transaction hash:\t{}", txhash.to_string().bold())?;
-    writeln!(
-        twriter,
-        "Wait for confirmation with: {}",
-        format!(
-            "melwallet-cli wait-confirmation -w {} {}",
-            wallet_path, txhash
-        )
-        .bright_blue(),
-    )?;
-    twriter.flush()?;
+    if wait {
+        wait_tx(state, tx.hash_nosigs()).await?;
+    } else {
+        let txhash = tx.hash_nosigs();
+        writeln!(twriter, "Transaction hash:\t{}", txhash.to_string().bold())?;
+        writeln!(
+            twriter,
+            "Wait for confirmation with: {}",
+            format!(
+                "melwallet-cli --wallet-path {} wait-confirmation {}",
+                wallet_path, txhash
+            )
+            .bright_blue(),
+        )?;
+        twriter.flush()?;
+    }
+
     Ok(())
 }
 
@@ -330,12 +340,14 @@ fn write_wallet_summary(out: &mut impl Write, wallet_summary: WalletSummary) -> 
     Ok(())
 }
 
-async fn wait_tx(state: &State, txhash: TxHash) {
-    while state.tx_completed(txhash) {
+async fn wait_tx(state: &State, txhash: TxHash) -> anyhow::Result<()> {
+    while !state.tx_completed(txhash) {
+        state.sync_wallet().await?;
         eprint!("{}", ".".yellow());
         smol::Timer::after(Duration::from_millis(500)).await;
     }
-    eprintln!("Transaction confirmed!");
+    eprintln!("Transaction {} confirmed!", txhash);
+    Ok(())
 }
 
 fn format_network(netid: NetID) -> ColoredString {

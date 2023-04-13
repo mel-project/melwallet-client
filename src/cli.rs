@@ -8,6 +8,7 @@ use tmelcrypt::HashVal;
 #[derive(Parser, Clone, Debug)]
 /// Mel Wallet Command Line Interface
 pub struct Args {
+    #[clap(long)]
     // path to the wallet to create or use
     pub wallet_path: String,
     #[clap(subcommand)]
@@ -22,7 +23,11 @@ pub enum SubcommandArgs {
         network: NetID,
     },
     /// Send a 1000 MEL faucet transaction for a testnet wallet
-    SendFaucet,
+    SendFaucet {
+        /// Whether or not to wait for the the transaction to confirm
+        #[clap(long)]
+        wait: bool,
+    },
     /// Details of a wallet
     Summary,
 
@@ -51,6 +56,9 @@ pub enum SubcommandArgs {
         /// Dumps the transaction as a hex string.
         #[clap(long)]
         dry_run: bool,
+        /// Whether or not to wait for the the transaction to confirm
+        #[clap(long)]
+        wait: bool,
         /// "Ballast" to add to the fee; 50 is plenty for an extra ed25519 signature added manually later.
         #[clap(long, default_value = "0")]
         fee_ballast: usize,
@@ -58,13 +66,13 @@ pub enum SubcommandArgs {
     /// Checks a pool.
     #[clap[verbatim_doc_comment]]
     Pool {
-        #[clap(long)]
         /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
         pool: PoolKey,
     },
     /// Swaps money from one denomination to another
     Swap {
         /// How much money to swap
+        #[clap(long, short)]
         value: CoinValue,
         #[clap(long, short)]
         /// "From" denomination.
@@ -72,7 +80,7 @@ pub enum SubcommandArgs {
         #[clap(long, short)]
         /// "To" denomination.
         to: Denom,
-        /// Whether or not to wait.
+        /// Whether or not to wait for the the transaction to confirm
         #[clap(long)]
         wait: bool,
     },
@@ -86,6 +94,9 @@ pub enum SubcommandArgs {
         b_count: CoinValue,
         /// Second denomination
         b_denom: Denom,
+        /// Whether or not to wait for the the transaction to confirm
+        #[clap(long)]
+        wait: bool,
     },
     /// Wait for a particular transaction to confirm
     WaitConfirmation {
@@ -94,6 +105,9 @@ pub enum SubcommandArgs {
     /// Sends a raw transaction in hex, with no customization options.
     SendRaw {
         txhex: String,
+        /// Whether or not to wait for the the transaction to confirm
+        #[clap(long)]
+        wait: bool,
     },
     /// Exports the secret key of a wallet. Will read password from stdin.
     ExportSk,
@@ -110,8 +124,8 @@ pub enum SubcommandArgs {
 
     /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
     Autoswap {
-        /// How much money to swap
-        value: u128,
+        /// How much MEL to swap
+        value: CoinValue,
     },
     /// Stakes a certain number of syms
     #[clap[ verbatim_doc_comment]]
@@ -126,6 +140,9 @@ pub enum SubcommandArgs {
         /// How long will the stake last. By default, 1 epoch with 1 epoch waiting time.
         #[clap(long)]
         duration: Option<u64>,
+        /// Whether or not to wait for the the transaction to confirm
+        #[clap(long)]
+        wait: bool,
     },
     // /// Shows the summary of the network for the wallet
     NetworkSummary,
