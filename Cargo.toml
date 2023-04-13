@@ -4,20 +4,19 @@ version = "0.7.3"
 
 edition = "2021"
 
-description = "melwalletd client library"
+description = "melwallet-cli library"
 license = "MPL-2.0"
 repository = "https://github.com/themeliolabs/melwallet-client"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# these fields were added to clean up the output while writing tests
-# https://doc.rust-lang.org/cargo/reference/cargo-targets.htm
+# # these fields were added to clean up the output while writing tests
+# # https://doc.rust-lang.org/cargo/reference/cargo-targets.htm
 
-[[tests]]
-test = true
+# [[tests]]
+# test = true
 
-
-[[doc]]
-test = false
+# [[doc]]
+# test = false
 
 # [patch.crates-io]
 # themelio-nodeprot={path="../themelio-nodeprot"}
@@ -51,12 +50,14 @@ terminal_size = "0.2.1"
 
 melvm = "0.1.0"
 melstructs = "0.3.2"
-# melwallet = {git = "https://github.com/mel-project/melwallet", branch = "master"}
-melwallet = {path = "../melwallet"}
+melwallet = {git = "https://github.com/mel-project/melwallet", branch = "master"}
+# melwallet = {path = "../melwallet"}
 acidjson = "0.1.2"
 melprot = "0.13.4"
 bytes = "1.4.0"
 base32 = "0.4.0"
+fastrand = "1.9.0"
+ed25519-dalek = "1.0.1"
 
 [dev-dependencies]
 assert_cmd = "2.0.7"

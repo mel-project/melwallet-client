@@ -1,10 +1,138 @@
 use anyhow::Context;
 
-use clap::{crate_version, Parser};
+use clap::Parser;
 use melstructs::{Address, CoinData, CoinID, CoinValue, Denom, NetID, PoolKey};
 use std::str::FromStr;
-use terminal_size::{terminal_size, Width};
 use tmelcrypt::HashVal;
+
+#[derive(Parser, Clone, Debug)]
+/// Mel Wallet Command Line Interface
+pub struct Args {
+    // path to the wallet to create or use
+    pub wallet_path: String,
+    #[clap(subcommand)]
+    pub subcommand: SubcommandArgs,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub enum SubcommandArgs {
+    /// Create a wallet.  Ex: `melwallet-cli create -w wallet123`
+    Create {
+        #[clap(long)]
+        network: NetID,
+    },
+    /// Send a 1000 MEL faucet transaction for a testnet wallet
+    SendFaucet,
+    /// Details of a wallet
+    Summary,
+
+    /// Send a transaction to the network
+    Send {
+        /// FORMAT: `destination,amount[,denom[,additional_data]]`
+        /// Specifies where to send funds; denom and additional_data are optional.
+        /// For example, `--to $ADDRESS,100.0` sends 100 MEL to $ADDRESS.
+        /// Amounts must be specified with numbers on either side of the decimal. Ex: 10.0, 0.1
+        /// Can be specified multiple times to send money to multiple addresses.
+        /// `denom` defaults to MEL
+        /// `additional_data` must be hex encoded by default, but allows passsing ascii with `ascii=""`
+        ///
+        #[clap(long, verbatim_doc_comment)]
+        to: Vec<CoinDataWrapper>,
+
+        /// Force the selection of a coin
+        #[clap(long)]
+        force_spend: Vec<CoinID>,
+        /// Additional covenants. This often must be specified if we are spending coins that belong to other addresses, like covenant coins.
+        #[clap(long)]
+        add_covenant: Vec<String>,
+        /// The contents of the data field, in hexadecimal.
+        #[clap(long, default_value = "")]
+        hex_data: String,
+        /// Dumps the transaction as a hex string.
+        #[clap(long)]
+        dry_run: bool,
+        /// "Ballast" to add to the fee; 50 is plenty for an extra ed25519 signature added manually later.
+        #[clap(long, default_value = "0")]
+        fee_ballast: usize,
+    },
+    /// Checks a pool.
+    #[clap[verbatim_doc_comment]]
+    Pool {
+        #[clap(long)]
+        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
+        pool: PoolKey,
+    },
+    /// Swaps money from one denomination to another
+    Swap {
+        /// How much money to swap
+        value: CoinValue,
+        #[clap(long, short)]
+        /// "From" denomination.
+        from: Denom,
+        #[clap(long, short)]
+        /// "To" denomination.
+        to: Denom,
+        /// Whether or not to wait.
+        #[clap(long)]
+        wait: bool,
+    },
+    /// Supplies liquidity to Melswap
+    LiqDeposit {
+        /// Number of the first denomination to deposit (in millionths)
+        a_count: CoinValue,
+        /// First denomination
+        a_denom: Denom,
+        /// Number of the second denomination to deposit (in millionths)
+        b_count: CoinValue,
+        /// Second denomination
+        b_denom: Denom,
+    },
+    /// Wait for a particular transaction to confirm
+    WaitConfirmation {
+        txhash: HashVal,
+    },
+    /// Sends a raw transaction in hex, with no customization options.
+    SendRaw {
+        txhex: String,
+    },
+    /// Exports the secret key of a wallet. Will read password from stdin.
+    ExportSk,
+    /// Provide a secret key to import an existing wallet
+    #[clap[verbatim_doc_comment]]
+    ImportSk {
+        #[clap(long, short)]
+        /// The secret key of the wallet used to import
+        secret: String,
+
+        #[clap(long, short)]
+        network: NetID,
+    },
+
+    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
+    Autoswap {
+        /// How much money to swap
+        value: u128,
+    },
+    /// Stakes a certain number of syms
+    #[clap[ verbatim_doc_comment]]
+    Stake {
+        /// How many microsyms to stake
+        value: CoinValue,
+        /// Ed25519 public key of the staker that receives voting rights
+        staker_pubkey: String,
+        /// When the stake takes effect. By default, as soon as possible.
+        #[clap(long)]
+        start: Option<u64>,
+        /// How long will the stake last. By default, 1 epoch with 1 epoch waiting time.
+        #[clap(long)]
+        duration: Option<u64>,
+    },
+    // /// Shows the summary of the network for the wallet
+    NetworkSummary,
+    /// Generate bash autocompletions
+    #[clap[verbatim_doc_comment]]
+    GenerateAutocomplete,
+}
 
 #[derive(Clone, Debug)]
 pub struct CoinDataWrapper(pub CoinData);
@@ -64,163 +192,4 @@ impl FromStr for CoinDataWrapper {
             ),
         }
     }
-}
-
-#[derive(Parser, Clone, Debug)]
-pub struct WalletArgs {
-    #[clap(short, long)]
-    // path to the wallet to create or use
-    pub wallet_path: String,
-}
-
-impl WalletArgs {
-    // pub async fn wallet(&self) -> http_types::Result<WalletSummary> {
-    //     Ok(self
-    //         .common
-    //         .rpc_client()
-    //         .wallet_summary(self.wallet.clone())
-    //         .await??
-    //     )
-    // }
-}
-
-#[derive(Parser, Clone, Debug)]
-/// Mel Wallet Command Line Interface
-pub enum Args {
-    /// Create a wallet.  Ex: `melwallet-cli create -w wallet123`
-    Create {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        #[clap(long)]
-        network: NetID,
-    },
-    /// Send a 1000 MEL faucet transaction for a testnet wallet
-    SendFaucet(WalletArgs),
-    /// Details of a wallet
-    Summary(WalletArgs),
-
-    /// Send a transaction to the network
-    Send {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        /// FORMAT: `destination,amount[,denom[,additional_data]]`
-        /// Specifies where to send funds; denom and additional_data are optional.
-        /// For example, `--to $ADDRESS,100.0` sends 100 MEL to $ADDRESS.
-        /// Amounts must be specified with numbers on either side of the decimal. Ex: 10.0, 0.1
-        /// Can be specified multiple times to send money to multiple addresses.
-        /// `denom` defaults to MEL
-        /// `additional_data` must be hex encoded by default, but allows passsing ascii with `ascii=""`
-        ///
-        #[clap(long, verbatim_doc_comment)]
-        to: Vec<CoinDataWrapper>,
-
-        /// Force the selection of a coin
-        #[clap(long)]
-        force_spend: Vec<CoinID>,
-        /// Additional covenants. This often must be specified if we are spending coins that belong to other addresses, like covenant coins.
-        #[clap(long)]
-        add_covenant: Vec<String>,
-        /// The contents of the data field, in hexadecimal.
-        #[clap(long, default_value = "")]
-        hex_data: String,
-        /// Dumps the transaction as a hex string.
-        #[clap(long)]
-        dry_run: bool,
-        /// "Ballast" to add to the fee; 50 is plenty for an extra ed25519 signature added manually later.
-        #[clap(long, default_value = "0")]
-        fee_ballast: usize,
-    },
-    /// Checks a pool.
-    #[clap[verbatim_doc_comment]]
-    Pool {
-        #[clap(long)]
-        /// What pool to check, in slash-separated tickers (for example, MEL/SYM or MEL/ERG).
-        pool: PoolKey,
-    },
-    /// Swaps money from one denomination to another
-    Swap {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        /// How much money to swap
-        value: Option<CoinValue>,
-        #[clap(long, short)]
-        /// "From" denomination.
-        from: Denom,
-        #[clap(long, short)]
-        /// "To" denomination.
-        to: Denom,
-        /// Whether or not to wait.
-        #[clap(long)]
-        wait: bool,
-    },
-    /// Supplies liquidity to Melswap
-    LiqDeposit {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        /// Number of the first denomination to deposit (in millionths)
-        a_count: CoinValue,
-        /// First denomination
-        a_denom: Denom,
-        /// Number of the second denomination to deposit (in millionths)
-        b_count: CoinValue,
-        /// Second denomination
-        b_denom: Denom,
-    },
-    /// Wait for a particular transaction to confirm
-    WaitConfirmation {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        txhash: HashVal,
-    },
-    /// Sends a raw transaction in hex, with no customization options.
-    SendRaw {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        txhex: String,
-    },
-    /// Exports the secret key of a wallet. Will read password from stdin.
-    ExportSk {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-    },
-    /// Provide a secret key to import an existing wallet
-    #[clap[verbatim_doc_comment]]
-    ImportSk {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-
-        #[clap(long, short)]
-        /// The secret key of the wallet used to import
-        secret: String,
-    },
-
-    /// Automatically executes arbitrage trades on the core, "triangular" MEL/SYM/ERG pairs
-    Autoswap {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        /// How much money to swap
-        value: u128,
-    },
-    /// Stakes a certain number of syms
-    #[clap[ verbatim_doc_comment]]
-    Stake {
-        #[clap(flatten)]
-        wargs: WalletArgs,
-        /// How many microsyms to stake
-        value: CoinValue,
-        /// Ed25519 public key of the staker that receives voting rights
-        staker_pubkey: String,
-        /// When the stake takes effect. By default, as soon as possible.
-        #[clap(long)]
-        start: Option<u64>,
-        /// How long will the stake last. By default, 1 epoch with 1 epoch waiting time.
-        #[clap(long)]
-        duration: Option<u64>,
-    },
-    // /// Show the summary of the network connected to the associated melwalletd instance
-    //
-    // NetworkSummary(CommonArgs),
-    /// Generate bash autocompletions
-    #[clap[verbatim_doc_comment]]
-    GenerateAutocomplete,
 }
