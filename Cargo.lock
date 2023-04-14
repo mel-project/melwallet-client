@@ -1564,6 +1564,7 @@ dependencies = [
 [[package]]
 name = "melwallet"
 version = "0.1.0"
+source = "git+https://github.com/mel-project/melwallet?branch=master#7dd28e05363013abeace06a4110a7fe70b01d0e2"
 dependencies = [
  "bytes",
  "melstructs",
