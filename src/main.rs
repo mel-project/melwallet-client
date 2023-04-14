@@ -1,5 +1,6 @@
 mod state;
 
+use acidjson::AcidJson;
 use anyhow::Context;
 use autoswap::do_autoswap;
 use colored::{Color, ColoredString, Colorize};
@@ -45,22 +46,28 @@ impl Drop for KillOnDrop {
 
 fn create_wallet(wallet_path: &str, network: NetID, secret: Ed25519SK) -> anyhow::Result<()> {
     let wallet_path = Path::new(&wallet_path);
-    let cov = melvm::Covenant::std_ed25519_pk_new(secret.to_public());
-    let addr = cov.hash();
+    // check if a wallet already exists at this path
+    let x: Result<AcidJson<WalletWithKey>, _> = AcidJson::open(wallet_path);
+    if let Ok(_) = x {
+        anyhow::bail!("A wallet already exists at this path");
+    } else {
+        let cov = melvm::Covenant::std_ed25519_pk_new(secret.to_public());
+        let addr = cov.hash();
 
-    let wallet_with_key = WalletWithKey {
-        wallet: Wallet {
-            address: addr,
-            height: BlockHeight(0),
-            confirmed_utxos: BTreeMap::new(),
-            pending_outgoing: BTreeMap::new(),
-            netid: network,
-        },
-        secret_key: secret,
-    };
+        let wallet_with_key = WalletWithKey {
+            wallet: Wallet {
+                address: addr,
+                height: BlockHeight(0),
+                confirmed_utxos: BTreeMap::new(),
+                pending_outgoing: BTreeMap::new(),
+                netid: network,
+            },
+            secret_key: secret,
+        };
 
-    std::fs::write(wallet_path, serde_json::to_string(&wallet_with_key)?)?;
-    Ok(())
+        std::fs::write(wallet_path, serde_json::to_string(&wallet_with_key)?)?;
+        Ok(())
+    }
 }
 
 fn main() -> anyhow::Result<()> {

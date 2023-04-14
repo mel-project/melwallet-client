@@ -17,7 +17,7 @@ pub struct Args {
 
 #[derive(Parser, Clone, Debug)]
 pub enum SubcommandArgs {
-    /// Create a wallet.  Ex: `melwallet-cli create -w wallet123`
+    /// Create a wallet.  Ex: `melwallet-cli --wallet-path wallet123 create`
     Create {
         #[clap(long)]
         network: NetID,
