@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::Path};
 use acidjson::AcidJson;
 use base32::Alphabet;
 use bytes::Bytes;
+use futures_util::StreamExt;
 use melprot::{Client, CoinChange};
 use melstructs::{
     Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, Header, NetID, PoolKey, PoolState,
@@ -10,7 +11,7 @@ use melstructs::{
 };
 use melwallet::{PrepareTxArgs, StdEd25519Signer, Wallet};
 use serde::{Deserialize, Serialize};
-use smol::stream::StreamExt;
+
 use tmelcrypt::Ed25519SK;
 
 use crate::cli::CoinDataWrapper;
@@ -301,38 +302,44 @@ impl State {
                 .melclient
                 .stream_snapshots(self.wwk.read().wallet.height + BlockHeight(1))
                 .take((latest_height.0 - self.wwk.read().wallet.height.0) as usize)
-                .boxed();
-
-            while let Some(snapshot) = stream.next().await {
-                let mut new_coins = vec![];
-                let mut spent_coins = vec![];
-                let ccs = snapshot.get_coin_changes(wallet_address).await?;
-                for cc in ccs {
-                    match cc {
-                        CoinChange::Add(id) => {
-                            if let Some(data_height) = snapshot.get_coin(id).await? {
-                                new_coins.push((id, data_height.coin_data));
+                .map(|snapshot| async {
+                    let ccs = snapshot.get_coin_changes(wallet_address).await?;
+                    let mut new_coins = vec![];
+                    let mut spent_coins = vec![];
+                    for cc in ccs {
+                        match cc {
+                            CoinChange::Add(id) => {
+                                if let Some(data_height) = snapshot.get_coin(id).await? {
+                                    new_coins.push((id, data_height.coin_data));
+                                }
+                            }
+                            CoinChange::Delete(id, _) => {
+                                spent_coins.push(id);
                             }
                         }
-                        CoinChange::Delete(id, _) => {
-                            spent_coins.push(id);
-                        }
                     }
-                }
+                    anyhow::Ok((snapshot, new_coins, spent_coins))
+                })
+                .buffered(10)
+                .boxed();
+
+            while let Some(item) = stream.next().await {
+                let (snapshot, new_coins, spent_coins) = item?;
                 self.wwk.write().wallet.add_coins(
                     snapshot.current_header().height,
                     new_coins,
                     spent_coins,
                 )?;
+            }
+            // put everything into the wallet
 
-                // if our wallet still has pending transactions new blocks have been produced, retransmit
-                if !self.wwk.read().wallet.pending_outgoing.is_empty()
-                    && latest_height > wallet_starting_height
-                {
-                    let pending_outgoing = self.wwk.read().wallet.pending_outgoing.clone();
-                    for (_, tx) in pending_outgoing.into_iter() {
-                        self.send_raw(tx).await?;
-                    }
+            // if our wallet still has pending transactions new blocks have been produced, retransmit
+            if !self.wwk.read().wallet.pending_outgoing.is_empty()
+                && latest_height > wallet_starting_height
+            {
+                let pending_outgoing = self.wwk.read().wallet.pending_outgoing.clone();
+                for (_, tx) in pending_outgoing.into_iter() {
+                    self.send_raw(tx).await?;
                 }
             }
         } else {

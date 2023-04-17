@@ -1590,6 +1590,7 @@ dependencies = [
  "colored",
  "ed25519-dalek",
  "fastrand",
+ "futures-util",
  "getrandom 0.2.9",
  "hex",
  "log",
