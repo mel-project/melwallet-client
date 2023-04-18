@@ -344,6 +344,7 @@ impl State {
             }
         } else {
             // resync everything
+            eprintln!("Wallet is a bit out of date...syncing with the network...this might take a while...");
             let latest_snapshot = self.melclient.latest_snapshot().await?;
             if let Some(owned_coins) = latest_snapshot.get_coins(wallet_address).await? {
                 self.wwk
