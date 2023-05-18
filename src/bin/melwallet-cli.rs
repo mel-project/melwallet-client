@@ -1,21 +1,22 @@
 use anyhow::Context;
 use autoswap::do_autoswap;
-use colored::{Color, ColoredString, Colorize};
-use melwallet_client::DaemonClient;
-
+use base32::Alphabet;
 use clap::{CommandFactory, Parser};
-
+use clap_complete::{generate, shells::Bash};
+use cli::{Args, CommonArgs};
+use colored::{Color, ColoredString, Colorize};
+use melstructs::{
+    CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxHash, TxKind, STAKE_EPOCH,
+};
+use melwallet_client::DaemonClient;
 use melwalletd_prot::types::{PrepareTxArgs, WalletSummary};
 use melwalletd_prot::MelwalletdClient;
+use mip102::WalletSecret;
 use once_cell::sync::Lazy;
 use smol::process::Child;
 use std::collections::BTreeMap;
 use std::io::{BufReader, Read, Stdin};
-
-use melstructs::{
-    CoinData, CoinValue, Denom, NetID, PoolKey, Transaction, TxHash, TxKind, STAKE_EPOCH,
-};
-
+use std::str::FromStr;
 use std::sync::Mutex;
 use std::{io::Write, time::Duration};
 use stdcode::StdcodeSerializeExt;
@@ -24,8 +25,6 @@ use tmelcrypt::Ed25519PK;
 mod autoswap;
 mod cli;
 
-use clap_complete::{generate, shells::Bash};
-use cli::{Args, CommonArgs};
 struct KillOnDrop(Option<Child>);
 
 impl Drop for KillOnDrop {
@@ -250,8 +249,12 @@ fn main() -> http_types::Result<()> {
                 let _wallet = wargs.wallet().await?;
                 let pwd = enter_password_prompt().await?;
                 let sk = rpc_client.export_sk(wargs.wallet, pwd).await??;
-                writeln!(twriter, "{}", sk.bold().bright_blue(),)?;
-                (serde_json::to_string_pretty(&sk)?, wargs.common)
+                let secret = WalletSecret::from_str(&sk)?;
+                writeln!(twriter, "{}", secret.to_string().bold().bright_blue(),)?;
+                (
+                    serde_json::to_string_pretty(&secret.to_string())?,
+                    wargs.common,
+                )
             }
             Args::Lock { wargs } => {
                 let rpc_client = wargs.common.rpc_client();
@@ -418,9 +421,16 @@ fn main() -> http_types::Result<()> {
                 let rpc_client = wargs.common.rpc_client();
                 let wallet_name = &wargs.wallet;
                 let pwd = enter_password_prompt().await?;
+                let sk = base32::encode(
+                    Alphabet::Crockford,
+                    WalletSecret::from_str(&secret)?
+                        .payload
+                        .slice(0..32)
+                        .as_ref(),
+                );
 
                 rpc_client
-                    .create_wallet(wallet_name.to_owned(), pwd, Some(secret))
+                    .create_wallet(wallet_name.to_owned(), pwd, Some(sk))
                     .await??;
 
                 let summary = rpc_client.wallet_summary(wallet_name.to_owned()).await??;
