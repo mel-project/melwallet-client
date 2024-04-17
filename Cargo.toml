@@ -50,7 +50,8 @@ terminal_size = "0.2.1"
 
 melvm = "0.1.0"
 melstructs = "0.3.2"
-melwallet = {git = "https://github.com/mel-project/melwallet", branch = "master"}
+melwallet = "0.1"
+#melwallet = {git = "https://github.com/mel-project/melwallet", branch = "master"}
 # melwallet = {path = "../melwallet"}
 acidjson = "0.1.2"
 melprot = "0.13.4"
