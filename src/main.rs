@@ -3,6 +3,7 @@ mod state;
 use acidjson::AcidJson;
 use anyhow::Context;
 use autoswap::do_autoswap;
+use base32::Alphabet;
 use colored::{Color, ColoredString, Colorize};
 
 use clap::{CommandFactory, Parser};
@@ -14,7 +15,6 @@ use smol::process::Child;
 use state::{State, WalletSummary};
 use std::collections::BTreeMap;
 
-use std::str::FromStr;
 use std::time::Duration;
 use stdcode::StdcodeSerializeExt;
 
@@ -88,7 +88,17 @@ fn main() -> anyhow::Result<()> {
                 eprintln!("successfully created wallet at {}", wallet_path)
             }
             SubcommandArgs::ImportSk { secret, network } => {
-                create_wallet(&wallet_path, network, Ed25519SK::from_str(&secret)?)?;
+                // We must reconstruct the secret key using the ed25519-dalek library
+                let secret = base32::decode(Alphabet::Crockford, &secret)
+                    .context("Failed to decode secret key")?;
+                let secret = ed25519_dalek::SecretKey::from_bytes(&secret)
+                    .context("Failed to create secret key")?;
+                let public: ed25519_dalek::PublicKey = (&secret).into();
+                let mut vv = [0u8; 64];
+                vv[0..32].copy_from_slice(&secret.to_bytes());
+                vv[32..].copy_from_slice(&public.to_bytes());
+                let final_secret = Ed25519SK(vv);
+                create_wallet(&wallet_path, network, final_secret)?;
 
                 eprintln!("successfully imported wallet to {}", wallet_path)
             }

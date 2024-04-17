@@ -237,6 +237,7 @@ impl State {
             .get_raw()
             .send_tx(tx.clone())
             .await?;
+        eprintln!("sent transaction..");
         self.wwk.write().wallet.add_pending(tx);
 
         Ok(())
@@ -282,15 +283,18 @@ impl State {
 
     pub async fn sync_wallet(&self) -> anyhow::Result<()> {
         let wallet_address = self.wwk.read().wallet.address;
+
         let wallet_starting_height = self.wwk.read().wallet.height;
+        // println!("wallet_starting_height = {wallet_starting_height}");
         let latest_height = self
             .melclient
             .latest_snapshot()
             .await?
             .current_header()
             .height;
-
+        // println!("latest_height = {latest_height}");
         if (latest_height.0 - wallet_starting_height.0) < 100 {
+            // println!("we're not too far behind ^_^");
             // we call `add_coins` unless we're too far out of sync with the network,
             // because downloading all the coins might take a while for wallets with lots of coins
             // and because we need to keep track of pending transactions.
@@ -304,6 +308,10 @@ impl State {
                 .take((latest_height.0 - self.wwk.read().wallet.height.0) as usize)
                 .map(|snapshot| async {
                     let ccs = snapshot.get_coin_changes(wallet_address).await?;
+                    // println!(
+                    //     "got coin changes for height {}",
+                    //     snapshot.current_header().height
+                    // );
                     let mut new_coins = vec![];
                     let mut spent_coins = vec![];
                     for cc in ccs {
@@ -330,6 +338,10 @@ impl State {
                     new_coins,
                     spent_coins,
                 )?;
+                // println!(
+                //     "added coin changes for height {}\n{new_len} new coins & {spent_len} spent_coins",
+                //     snapshot.current_header().height,
+                // );
             }
             // put everything into the wallet
 

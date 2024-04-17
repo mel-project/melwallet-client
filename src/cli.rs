@@ -109,7 +109,7 @@ pub enum SubcommandArgs {
         #[clap(long)]
         wait: bool,
     },
-    /// Exports the secret key of a wallet. Will read password from stdin.
+    /// Exports the secret key of a wallet.
     ExportSk,
     /// Provide a secret key to import an existing wallet
     #[clap[verbatim_doc_comment]]
