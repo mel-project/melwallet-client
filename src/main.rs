@@ -1,3 +1,4 @@
+mod persistent_truststore;
 mod state;
 
 use acidjson::AcidJson;
@@ -109,7 +110,7 @@ fn main() -> anyhow::Result<()> {
         let state = State::new(&wallet_path).await?;
         // sync wallet with network
         state.sync_wallet().await?;
-
+        // println!("finished syncing wallet!");
         match subcommand {
             SubcommandArgs::Create { network: _ } => {
                 // we already created the wallet earlier

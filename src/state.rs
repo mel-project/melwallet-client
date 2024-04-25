@@ -1,20 +1,24 @@
 use std::{collections::BTreeMap, path::Path};
 
 use acidjson::AcidJson;
+use anyhow::Context;
 use base32::Alphabet;
 use bytes::Bytes;
 use futures_util::StreamExt;
-use melprot::{Client, CoinChange};
+use melnet2::wire::http::HttpBackhaul;
+use melnet2::Backhaul;
+use melprot::{Client, CoinChange, NodeRpcClient};
 use melstructs::{
     Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, Header, NetID, PoolKey, PoolState,
     Transaction, TxHash, TxKind,
 };
 use melwallet::{PrepareTxArgs, StdEd25519Signer, Wallet};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 use tmelcrypt::Ed25519SK;
 
-use crate::cli::CoinDataWrapper;
+use crate::{cli::CoinDataWrapper, persistent_truststore::PersistentTrustStore};
 
 #[derive(Serialize, Deserialize)]
 pub struct WalletWithKey {
@@ -46,7 +50,21 @@ impl State {
     pub async fn new(wallet_path: &str) -> anyhow::Result<Self> {
         let wwk: AcidJson<WalletWithKey> = AcidJson::open(&Path::new(wallet_path))?;
         let netid = wwk.read().wallet.netid;
-        let melclient = Client::autoconnect(netid).await?;
+
+        let bootstrap_routes = melbootstrap::bootstrap_routes(netid);
+        let route = *bootstrap_routes
+            .first()
+            .context("Error retreiving bootstrap routes")?;
+        static BACKHAUL: Lazy<HttpBackhaul> = Lazy::new(HttpBackhaul::new);
+        let rpc_client = NodeRpcClient(BACKHAUL.connect(route.to_string().into()).await?);
+        let melclient = Client::new_with_truststore(
+            netid,
+            rpc_client,
+            PersistentTrustStore::new(&(wallet_path.to_owned() + ".store"))?,
+        );
+        let trusted_height =
+            melbootstrap::checkpoint_height(netid).context("Unable to get checkpoint height")?;
+        melclient.trust(trusted_height);
         Ok(Self { wwk, melclient })
     }
 
@@ -308,10 +326,10 @@ impl State {
                 .take((latest_height.0 - self.wwk.read().wallet.height.0) as usize)
                 .map(|snapshot| async {
                     let ccs = snapshot.get_coin_changes(wallet_address).await?;
-                    // println!(
-                    //     "got coin changes for height {}",
-                    //     snapshot.current_header().height
-                    // );
+                    println!(
+                        "got coin changes for height {}",
+                        snapshot.current_header().height
+                    );
                     let mut new_coins = vec![];
                     let mut spent_coins = vec![];
                     for cc in ccs {
@@ -338,10 +356,6 @@ impl State {
                     new_coins,
                     spent_coins,
                 )?;
-                // println!(
-                //     "added coin changes for height {}\n{new_len} new coins & {spent_len} spent_coins",
-                //     snapshot.current_header().height,
-                // );
             }
             // put everything into the wallet
 
