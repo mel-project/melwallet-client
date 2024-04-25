@@ -56,6 +56,7 @@ impl State {
             .first()
             .context("Error retreiving bootstrap routes")?;
         static BACKHAUL: Lazy<HttpBackhaul> = Lazy::new(HttpBackhaul::new);
+        // println!("{} bootstrap routes: {:?}", netid, bootstrap_routes);
         let rpc_client = NodeRpcClient(BACKHAUL.connect(route.to_string().into()).await?);
         let melclient = Client::new_with_truststore(
             netid,
@@ -326,10 +327,10 @@ impl State {
                 .take((latest_height.0 - self.wwk.read().wallet.height.0) as usize)
                 .map(|snapshot| async {
                     let ccs = snapshot.get_coin_changes(wallet_address).await?;
-                    println!(
-                        "got coin changes for height {}",
-                        snapshot.current_header().height
-                    );
+                    // println!(
+                    //     "got coin changes for height {}",
+                    //     snapshot.current_header().height
+                    // );
                     let mut new_coins = vec![];
                     let mut spent_coins = vec![];
                     for cc in ccs {
