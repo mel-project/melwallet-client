@@ -78,6 +78,7 @@ fn main() -> anyhow::Result<()> {
         let Args {
             wallet_path,
             subcommand,
+            melnode_addr,
         } = Args::parse();
 
         // create wallet if that's the command, *before* we try to open it by creating the state
@@ -107,7 +108,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         // create melwallet-cli state
-        let state = State::new(&wallet_path).await?;
+        let state = State::new(&wallet_path, melnode_addr).await?;
         // sync wallet with network
         state.sync_wallet().await?;
         // println!("finished syncing wallet!");

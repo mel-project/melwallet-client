@@ -1489,8 +1489,7 @@ dependencies = [
 [[package]]
 name = "melprot"
 version = "0.13.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d450ed39b4f3cfa6640695d40f80d52d1ad3807a8516c24222d3cc227850fcd"
+source = "git+https://github.com/mel-project/melprot?branch=autoconnect-with-truststore#412b32618e4fc4d455bcec121379260478f06be6"
 dependencies = [
  "anyhow",
  "arrayref",

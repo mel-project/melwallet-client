@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, net::SocketAddr, path::Path};
 
 use acidjson::AcidJson;
 use anyhow::Context;
@@ -47,25 +47,16 @@ pub struct State {
 impl State {
     /// Opens wallet at given path (assumes the wallet exists)
     /// and creates a melclient
-    pub async fn new(wallet_path: &str) -> anyhow::Result<Self> {
-        let wwk: AcidJson<WalletWithKey> = AcidJson::open(&Path::new(wallet_path))?;
+    pub async fn new(wallet_path: &str, melnode_addr: Option<SocketAddr>) -> anyhow::Result<Self> {
+        let wwk: AcidJson<WalletWithKey> = AcidJson::open(Path::new(wallet_path))?;
         let netid = wwk.read().wallet.netid;
 
-        let bootstrap_routes = melbootstrap::bootstrap_routes(netid);
-        let route = *bootstrap_routes
-            .first()
-            .context("Error retreiving bootstrap routes")?;
-        static BACKHAUL: Lazy<HttpBackhaul> = Lazy::new(HttpBackhaul::new);
-        // println!("{} bootstrap routes: {:?}", netid, bootstrap_routes);
-        let rpc_client = NodeRpcClient(BACKHAUL.connect(route.to_string().into()).await?);
-        let melclient = Client::new_with_truststore(
-            netid,
-            rpc_client,
-            PersistentTrustStore::new(&(wallet_path.to_owned() + ".store"))?,
-        );
-        let trusted_height =
-            melbootstrap::checkpoint_height(netid).context("Unable to get checkpoint height")?;
-        melclient.trust(trusted_height);
+        let melclient = if let Some(melnode_addr) = melnode_addr {
+            Client::connect_http(netid, melnode_addr).await?
+        } else {
+            let trust_store = PersistentTrustStore::new(&(wallet_path.to_owned() + ".store"))?;
+            Client::autoconnect_with_truststore(netid, trust_store).await?
+        };
         Ok(Self { wwk, melclient })
     }
 

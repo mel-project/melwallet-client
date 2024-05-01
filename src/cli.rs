@@ -2,17 +2,22 @@ use anyhow::Context;
 
 use clap::Parser;
 use melstructs::{Address, CoinData, CoinID, CoinValue, Denom, NetID, PoolKey};
-use std::str::FromStr;
+use std::{net::SocketAddr, str::FromStr};
 use tmelcrypt::HashVal;
 
 #[derive(Parser, Clone, Debug)]
 /// Mel Wallet Command Line Interface
 pub struct Args {
     #[clap(long)]
-    // path to the wallet to create or use
+    // Path to the wallet to create or use
     pub wallet_path: String,
+
     #[clap(subcommand)]
     pub subcommand: SubcommandArgs,
+
+    // An optional address to the melnode your wallet will point to
+    #[clap(long)]
+    pub melnode_addr: Option<SocketAddr>,
 }
 
 #[derive(Parser, Clone, Debug)]
