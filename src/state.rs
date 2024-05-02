@@ -52,6 +52,7 @@ impl State {
         let netid = wwk.read().wallet.netid;
 
         let melclient = if let Some(melnode_addr) = melnode_addr {
+            // TODO: add a trust store here if needed as well?
             Client::connect_http(netid, melnode_addr).await?
         } else {
             let trust_store = PersistentTrustStore::new(&(wallet_path.to_owned() + ".store"))?;
