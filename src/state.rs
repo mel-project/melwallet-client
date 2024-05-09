@@ -1,19 +1,16 @@
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, net::SocketAddr, path::Path};
 
 use acidjson::AcidJson;
 use anyhow::Context;
 use base32::Alphabet;
 use bytes::Bytes;
 use futures_util::StreamExt;
-use melnet2::wire::http::HttpBackhaul;
-use melnet2::Backhaul;
-use melprot::{Client, CoinChange, NodeRpcClient};
+use melprot::{Client, CoinChange};
 use melstructs::{
     Address, BlockHeight, CoinData, CoinID, CoinValue, Denom, Header, NetID, PoolKey, PoolState,
     Transaction, TxHash, TxKind,
 };
 use melwallet::{PrepareTxArgs, StdEd25519Signer, Wallet};
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 
 use tmelcrypt::Ed25519SK;
@@ -47,25 +44,21 @@ pub struct State {
 impl State {
     /// Opens wallet at given path (assumes the wallet exists)
     /// and creates a melclient
-    pub async fn new(wallet_path: &str) -> anyhow::Result<Self> {
+    pub async fn new(wallet_path: &str, bootstrap: Option<SocketAddr>) -> anyhow::Result<Self> {
         let wwk: AcidJson<WalletWithKey> = AcidJson::open(&Path::new(wallet_path))?;
         let netid = wwk.read().wallet.netid;
 
-        let bootstrap_routes = melbootstrap::bootstrap_routes(netid);
-        let route = *bootstrap_routes
-            .first()
-            .context("Error retreiving bootstrap routes")?;
-        static BACKHAUL: Lazy<HttpBackhaul> = Lazy::new(HttpBackhaul::new);
-        // println!("{} bootstrap routes: {:?}", netid, bootstrap_routes);
-        let rpc_client = NodeRpcClient(BACKHAUL.connect(route.to_string().into()).await?);
-        let melclient = Client::new_with_truststore(
-            netid,
-            rpc_client,
-            PersistentTrustStore::new(&(wallet_path.to_owned() + ".store"))?,
-        );
-        let trusted_height =
-            melbootstrap::checkpoint_height(netid).context("Unable to get checkpoint height")?;
-        melclient.trust(trusted_height);
+        let trust_store = PersistentTrustStore::new(&(wallet_path.to_owned() + ".store"))?;
+        let melclient = if let Some(bootstrap) = bootstrap {
+            let client =
+                Client::connect_http_with_truststore(netid, bootstrap, trust_store).await?;
+            let trusted_height = melbootstrap::checkpoint_height(netid)
+                .context("Unable to get checkpoint height")?;
+            client.trust(trusted_height);
+            client
+        } else {
+            Client::autoconnect_with_truststore(netid, trust_store).await?
+        };
         Ok(Self { wwk, melclient })
     }
 

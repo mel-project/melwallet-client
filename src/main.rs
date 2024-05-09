@@ -77,6 +77,7 @@ fn main() -> anyhow::Result<()> {
         let mut command = Args::command();
         let Args {
             wallet_path,
+            bootstrap,
             subcommand,
         } = Args::parse();
 
@@ -107,7 +108,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         // create melwallet-cli state
-        let state = State::new(&wallet_path).await?;
+        let state = State::new(&wallet_path, bootstrap).await?;
         // sync wallet with network
         state.sync_wallet().await?;
         // println!("finished syncing wallet!");
