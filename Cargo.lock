@@ -1450,6 +1450,7 @@ dependencies = [
 [[package]]
 name = "melbootstrap"
 version = "0.8.3"
+source = "git+https://github.com/mel-project/melbootstrap#8aa9ae0f90f9d547493be1705285d611f3f02d59"
 dependencies = [
  "melstructs",
  "once_cell",
@@ -1497,6 +1498,7 @@ dependencies = [
 [[package]]
 name = "melprot"
 version = "0.13.7"
+source = "git+https://github.com/mel-project/melprot#3d2ab3fe1859597aaab89c783d8dc366d3c460fe"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -1571,6 +1573,7 @@ dependencies = [
 [[package]]
 name = "melwallet"
 version = "0.1.0"
+source = "git+https://github.com/mel-project/melwallet#0b91e0a0ee42fe2d0b36c3c0173bbe20b5ad16fd"
 dependencies = [
  "bytes",
  "melstructs",
