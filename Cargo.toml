@@ -50,7 +50,7 @@ terminal_size = "0.2.1"
 
 melvm = "0.1.0"
 melstructs = "0.3.2"
-melwallet = { git = "https://github.com/mel-project/melwallet" }
+#melwallet = { git = "https://github.com/mel-project/melwallet" }
 acidjson = "0.1.2"
 bytes = "1.4.0"
 base32 = "0.4.0"
@@ -58,8 +58,10 @@ fastrand = "1.9.0"
 ed25519-dalek = "1.0.1"
 futures-util = "0.3.28"
 melnet2 = "0.3.1"
-melbootstrap = { git = "https://github.com/mel-project/melbootstrap" }
-melprot = { git = "https://github.com/mel-project/melprot" }
+#melprot = { git = "https://github.com/mel-project/melprot" }
+melbootstrap = "0.8.5"
+melprot = "0.13.7"
+melwallet = "0.1.2"
 
 [dev-dependencies]
 assert_cmd = "2.0.7"
