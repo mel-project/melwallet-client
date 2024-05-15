@@ -1605,7 +1605,8 @@ dependencies = [
 [[package]]
 name = "melstructs"
 version = "0.3.3"
-source = "git+https://github.com/mel-project/melstructs#522e6c721df1ae1770172aa51355af7270542658"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d9ebeac7f287550de00e4064cb3ae4eaf6220c747740922cef9215dbc630882"
 dependencies = [
  "bytes",
  "derivative",
