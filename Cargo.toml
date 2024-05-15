@@ -19,7 +19,7 @@ repository = "https://github.com/mel-project/melwallet-client"
 # test = false
 
 [patch.crates-io]
-melstructs = { git = "https://github.com/mel-project/melstructs" }
+#melstructs = { git = "https://github.com/mel-project/melstructs" }
 # themelio-nodeprot={path="../themelio-nodeprot"}
 # melwalletd-prot={path="../melwalletd-prot"}
 

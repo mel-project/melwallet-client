@@ -1604,8 +1604,8 @@ dependencies = [
 
 [[package]]
 name = "melstructs"
-version = "0.3.2"
-source = "git+https://github.com/mel-project/melstructs#2b7c1c679533ca7ea098d224d63a20110498d54c"
+version = "0.3.3"
+source = "git+https://github.com/mel-project/melstructs#522e6c721df1ae1770172aa51355af7270542658"
 dependencies = [
  "bytes",
  "derivative",
