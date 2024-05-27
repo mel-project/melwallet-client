@@ -1458,9 +1458,9 @@ dependencies = [
 
 [[package]]
 name = "melbootstrap"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24368d3e4b6a4eb2a40767a3d0f72a7d9f4d8f2f1f0fbe5d406f7b52214c668a"
+checksum = "c0521ad265231ac3e547e5a0156e04f937f2a3cb5eb72c573f8053f1038a228b"
 dependencies = [
  "melstructs",
  "once_cell",
@@ -1497,8 +1497,7 @@ dependencies = [
 
 [[package]]
 name = "melprot"
-version = "0.13.7"
-source = "git+https://github.com/mel-project/melprot#3d2ab3fe1859597aaab89c783d8dc366d3c460fe"
+version = "0.13.8"
 dependencies = [
  "anyhow",
  "arrayref",
@@ -1510,7 +1509,7 @@ dependencies = [
  "hex",
  "log",
  "lru",
- "melbootstrap 0.8.4",
+ "melbootstrap 0.8.5",
  "melnet2",
  "melstructs",
  "mini-moka",

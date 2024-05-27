@@ -305,7 +305,7 @@ impl State {
             .current_header()
             .height;
         // println!("latest_height = {latest_height}");
-        if (latest_height.0 - wallet_starting_height.0) < 100 {
+        if latest_height.0 > 100 && (latest_height.0 - wallet_starting_height.0) < 100 {
             // println!("we're not too far behind ^_^");
             // we call `add_coins` unless we're too far out of sync with the network,
             // because downloading all the coins might take a while for wallets with lots of coins
@@ -342,7 +342,7 @@ impl State {
                 })
                 .buffered(10)
                 .boxed();
-
+            // put everything into the wallet
             while let Some(item) = stream.next().await {
                 let (snapshot, new_coins, spent_coins) = item?;
                 self.wwk.write().wallet.add_coins(
@@ -351,9 +351,7 @@ impl State {
                     spent_coins,
                 )?;
             }
-            // put everything into the wallet
-
-            // if our wallet still has pending transactions new blocks have been produced, retransmit
+            // if our wallet still has pending transactions and new blocks have been produced, retransmit
             if !self.wwk.read().wallet.pending_outgoing.is_empty()
                 && latest_height > wallet_starting_height
             {

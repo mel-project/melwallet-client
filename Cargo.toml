@@ -59,7 +59,8 @@ ed25519-dalek = "1.0.1"
 futures-util = "0.3.28"
 melnet2 = "0.3.1"
 melbootstrap = { git = "https://github.com/mel-project/melbootstrap" }
-melprot = { git = "https://github.com/mel-project/melprot" }
+# melprot = { git = "https://github.com/mel-project/melprot" }
+melprot = { path = "../melprot" }
 
 [dev-dependencies]
 assert_cmd = "2.0.7"
