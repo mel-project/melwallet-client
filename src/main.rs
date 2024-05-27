@@ -16,6 +16,7 @@ use smol::process::Child;
 use state::{State, WalletSummary};
 use std::collections::BTreeMap;
 
+use std::net::SocketAddr;
 use std::time::Duration;
 use stdcode::StdcodeSerializeExt;
 
@@ -118,7 +119,7 @@ fn main() -> anyhow::Result<()> {
             SubcommandArgs::SendFaucet { wait } => {
                 let tx = state.prepare_faucet_tx().await?;
                 state.send_raw(tx.clone()).await?;
-                send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
+                send_postamble(&tx, twriter, &wallet_path, &state, bootstrap, wait).await?;
             }
             SubcommandArgs::Summary => {
                 let wallet_summary = state.wallet_summary().await?;
@@ -159,7 +160,7 @@ fn main() -> anyhow::Result<()> {
 
                     // send
                     state.send_raw(tx.clone()).await?;
-                    send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
+                    send_postamble(&tx, twriter, &wallet_path, &state, bootstrap, wait).await?;
                 }
             }
             SubcommandArgs::Pool { pool } => {
@@ -227,7 +228,7 @@ fn main() -> anyhow::Result<()> {
                     .await?;
                 proceed_prompt().await?;
                 state.send_raw(tx.clone()).await?;
-                send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
+                send_postamble(&tx, twriter, &wallet_path, &state, bootstrap, wait).await?;
             }
             SubcommandArgs::WaitConfirmation { txhash } => {
                 wait_tx(&state, TxHash(txhash)).await?;
@@ -238,7 +239,7 @@ fn main() -> anyhow::Result<()> {
                         .context("malformed transaction")?;
                 proceed_prompt().await?;
                 state.send_raw(tx.clone()).await?;
-                send_postamble(&tx, twriter, &wallet_path, &state, wait).await?;
+                send_postamble(&tx, twriter, &wallet_path, &state, bootstrap, wait).await?;
             }
             SubcommandArgs::ExportSk => {
                 let sk = state.export_sk()?;
@@ -318,21 +319,28 @@ async fn send_postamble(
     mut twriter: TabWriter<Stderr>,
     wallet_path: &str,
     state: &State,
+    bootstrap: Option<SocketAddr>,
     wait: bool,
 ) -> anyhow::Result<()> {
     if wait {
         wait_tx(state, tx.hash_nosigs()).await?;
     } else {
         let txhash = tx.hash_nosigs();
+        let melwalletcli_cmd = match bootstrap {
+            Some(bootstrap) => format!(
+                "melwallet-cli --bootstrap {} --wallet-path {} wait-confirmation {}",
+                bootstrap, wallet_path, txhash
+            ),
+            None => format!(
+                "melwallet-cli --wallet-path {} wait-confirmation {}",
+                wallet_path, txhash
+            ),
+        };
         writeln!(twriter, "Transaction hash:\t{}", txhash.to_string().bold())?;
         writeln!(
             twriter,
             "Wait for confirmation with: {}",
-            format!(
-                "melwallet-cli --wallet-path {} wait-confirmation {}",
-                wallet_path, txhash
-            )
-            .bright_blue(),
+            melwalletcli_cmd.bright_blue(),
         )?;
         twriter.flush()?;
     }
