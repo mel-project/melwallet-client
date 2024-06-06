@@ -22,7 +22,7 @@ repository = "https://github.com/mel-project/melwallet-client"
 #melstructs = { git = "https://github.com/mel-project/melstructs" }
 # themelio-nodeprot={path="../themelio-nodeprot"}
 # melwalletd-prot={path="../melwalletd-prot"}
-
+melbootstrap = { git = "https://github.com/mel-project/melbootstrap", branch = "history-wipe" }
 
 [dependencies]
 tmelcrypt= "0.2.4"

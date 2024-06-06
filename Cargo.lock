@@ -1531,8 +1531,7 @@ dependencies = [
 [[package]]
 name = "melbootstrap"
 version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0521ad265231ac3e547e5a0156e04f937f2a3cb5eb72c573f8053f1038a228b"
+source = "git+https://github.com/mel-project/melbootstrap?branch=history-wipe#b1b819e1853bd004a99d23705b92fca05a895e06"
 dependencies = [
  "melstructs",
  "once_cell",
